@@ -346,6 +346,22 @@ export function validateChatRequest(
     }
   }
 
+  // 8. Validate optional model
+  let resolvedModel: string | undefined;
+  if (raw.model !== undefined) {
+    if (typeof raw.model !== 'string' || raw.model.trim().length === 0 || raw.model.length > 100) {
+      details.push({
+        field: 'model',
+        message: 'model must be a non-empty string under 100 characters.',
+      });
+    } else {
+      resolvedModel = raw.model.trim();
+    }
+  }
+
+  // 9. Validate optional stream flag
+  const resolvedStream = typeof raw.stream === 'boolean' ? raw.stream : undefined;
+
   if (details.length > 0) {
     return {
       valid: false,
@@ -362,6 +378,8 @@ export function validateChatRequest(
       contexts: resolvedContexts,
       sessionId: resolvedSessionId,
       providerId: resolvedProviderId,
+      model: resolvedModel,
+      stream: resolvedStream,
       topK: resolvedTopK,
     },
   };

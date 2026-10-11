@@ -35,8 +35,8 @@ export function MessageList({
         <MessageBubble key={message.id} message={message} />
       ))}
 
-      {/* Loading State */}
-      {isLoading && (
+      {/* Loading State: shown if waiting for first response before assistant message appears */}
+      {isLoading && (!messages.length || messages[messages.length - 1]?.role !== 'assistant') && (
         <div className="flex gap-3 max-w-3xl mr-auto animate-in fade-in duration-200" aria-busy="true">
           <div className="w-8 h-8 rounded-xl bg-slate-800 text-indigo-400 border border-slate-700 flex items-center justify-center shrink-0">
             <Bot className="w-4 h-4 animate-spin" />

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { defaultChatService } from '@/backend/services';
+import { chatService } from '@/backend/services/chat-service';
 import { createApiSuccessResponse, createApiErrorResponse } from '@/lib/validation';
 
 export async function GET(
@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: { id: string } }
 ) {
   try {
-    const session = await defaultChatService.getSession(params.id);
+    const session = await chatService.getSession(params.id);
     if (!session) {
       return NextResponse.json(
         createApiErrorResponse('NOT_FOUND', `Session '${params.id}' not found.`),
@@ -30,7 +30,7 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    const deleted = await defaultChatService.deleteSession(params.id);
+    const deleted = await chatService.deleteSession(params.id);
     if (!deleted) {
       return NextResponse.json(
         createApiErrorResponse('NOT_FOUND', `Session '${params.id}' not found or already deleted.`),

@@ -1,5 +1,4 @@
 import {
-  DocumentChunk,
   IEmbeddingProvider,
   IVectorStore,
   RagQueryOptions,
@@ -8,45 +7,7 @@ import {
 } from '@/lib/types';
 import { defaultEmbeddingProvider } from '@/backend/providers';
 import { defaultVectorStore } from '@/backend/storage';
-
-/**
- * Structural chunking utility.
- * In future phases, specialized semantic and recursive character splitters can be added.
- */
-export class TextChunker {
-  chunkText(
-    text: string,
-    documentId: string,
-    metadata: Record<string, unknown> = {},
-    chunkSize = 1000
-  ): DocumentChunk[] {
-    if (!text) return [];
-
-    const chunks: DocumentChunk[] = [];
-    let start = 0;
-    let index = 0;
-
-    while (start < text.length) {
-      const end = Math.min(start + chunkSize, text.length);
-      const content = text.slice(start, end);
-      chunks.push({
-        id: `${documentId}_chunk_${index}`,
-        documentId,
-        content,
-        chunkIndex: index,
-        metadata: {
-          ...metadata,
-          startIndex: start,
-          endIndex: end,
-        },
-      });
-      start = end;
-      index++;
-    }
-
-    return chunks;
-  }
-}
+import { TextChunker, textChunker } from './chunker.ts';
 
 /**
  * Structural RAG Retriever orchestrating embedding and vector retrieval.
@@ -72,5 +33,55 @@ export class RagRetriever {
   }
 }
 
-export const defaultChunker = new TextChunker();
+export const defaultChunker = textChunker;
 export const defaultRetriever = new RagRetriever();
+
+export {
+  TextChunker,
+  textChunker,
+  normalizeChunkWhitespace,
+  DEFAULT_CHUNK_SIZE,
+  DEFAULT_CHUNK_OVERLAP,
+  MIN_CHUNK_SIZE,
+} from './chunker.ts';
+
+export type {
+  ChunkerOptions,
+  ChunkMetadata,
+  DocumentChunkResult,
+} from './chunker.ts';
+
+export {
+  DocumentProcessor,
+  documentProcessor,
+  DocumentProcessorError,
+  normalizeWhitespace,
+  DEFAULT_MAX_PDF_SIZE_BYTES,
+  DEFAULT_MIN_PDF_SIZE_BYTES,
+} from './document-processor.ts';
+
+export type {
+  PdfValidationOptions,
+  ProcessedPdfMetadata,
+  DocumentProcessorErrorCode,
+  ExtractedPage,
+  ExtractedPdfDocument,
+} from './document-processor.ts';
+
+export {
+  GeminiEmbeddingProvider,
+  defaultEmbeddingProvider as geminiEmbeddingProvider,
+  EmbeddingError,
+  DEFAULT_EMBEDDING_MODEL,
+  EMBEDDING_DIMENSIONS,
+  MAX_EMBEDDING_BATCH_SIZE,
+  MAX_EMBEDDING_INPUT_CHARS,
+} from './embeddings.ts';
+
+export type {
+  EmbeddingConfig,
+  EmbeddingModelInfo,
+  ChunkEmbeddingInput,
+  EmbeddingTaskType,
+  EmbeddingErrorCode,
+} from './embeddings.ts';

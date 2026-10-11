@@ -1,9 +1,9 @@
 'use client';
 
 import { useReducer, useEffect, useCallback, useRef } from 'react';
-import { ChatMessage, ChatSession, ContextScope } from '@/lib/types';
-import { INITIAL_CONTEXT_SCOPES } from '@/lib/constants';
-import { chatClient } from '@/lib/chat-client';
+import type { ChatMessage, ChatSession, ContextScope } from '../lib/types.ts';
+import { INITIAL_CONTEXT_SCOPES } from '../lib/constants.ts';
+import { chatClient } from '../lib/chat-client.ts';
 
 // ---------------------------------------------------------------------------
 // 1. State Model Types
@@ -25,7 +25,31 @@ export interface ChatState {
 
 export type ChatAction =
   | { type: 'SET_INPUT'; payload: string }
-  | { type: 'SUBMIT_START'; payload: { message: ChatMessage; rawText: string } }
+  | {
+      type: 'SUBMIT_START';
+      payload: {
+        userMessage: ChatMessage;
+        assistantPlaceholder: ChatMessage;
+        rawText: string;
+      };
+    }
+  | {
+      type: 'STREAM_DELTA';
+      payload: { assistantMessageId: string; text: string };
+    }
+  | {
+      type: 'STREAM_SUCCESS';
+      payload: {
+        assistantMessageId: string;
+        assistantMessage: ChatMessage;
+        session: ChatSession;
+      };
+    }
+  | {
+      type: 'STREAM_ERROR';
+      payload: { assistantMessageId?: string; error: string };
+    }
+  | { type: 'CANCEL_REQUEST' }
   | {
       type: 'SUBMIT_SUCCESS';
       payload: { assistantMessage: ChatMessage; session: ChatSession };
@@ -45,7 +69,7 @@ export type ChatAction =
 // 2. Initial State & Reducer
 // ---------------------------------------------------------------------------
 
-const initialState: ChatState = {
+export const initialState: ChatState = {
   sessions: [],
   activeSessionId: undefined,
   messages: [],
@@ -59,7 +83,7 @@ const initialState: ChatState = {
   isMobileNavOpen: false,
 };
 
-function chatReducer(state: ChatState, action: ChatAction): ChatState {
+export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case 'SET_INPUT':
       return { ...state, input: action.payload };
@@ -67,12 +91,70 @@ function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'SUBMIT_START':
       return {
         ...state,
-        messages: [...state.messages, action.payload.message],
+        messages: [
+          ...state.messages,
+          action.payload.userMessage,
+          action.payload.assistantPlaceholder,
+        ],
         input: '',
         isLoading: true,
         error: null,
         lastFailedMessage: action.payload.rawText,
       };
+
+    case 'STREAM_DELTA': {
+      const updatedMessages = state.messages.map((m) =>
+        m.id === action.payload.assistantMessageId
+          ? { ...m, content: m.content + action.payload.text }
+          : m
+      );
+      return { ...state, messages: updatedMessages };
+    }
+
+    case 'STREAM_SUCCESS': {
+      const updatedSessions = state.sessions.filter(
+        (s) => s.id !== action.payload.session.id
+      );
+      const updatedMessages = state.messages.map((m) =>
+        m.id === action.payload.assistantMessageId
+          ? action.payload.assistantMessage
+          : m
+      );
+      return {
+        ...state,
+        messages: updatedMessages,
+        sessions: [action.payload.session, ...updatedSessions],
+        activeSessionId: action.payload.session.id,
+        isLoading: false,
+        error: null,
+        lastFailedMessage: undefined,
+      };
+    }
+
+    case 'STREAM_ERROR': {
+      const updatedMessages = state.messages.filter(
+        (m) => m.id !== action.payload.assistantMessageId || m.content.length > 0
+      );
+      return {
+        ...state,
+        messages: updatedMessages,
+        isLoading: false,
+        error: action.payload.error,
+      };
+    }
+
+    case 'CANCEL_REQUEST': {
+      const lastMsg = state.messages[state.messages.length - 1];
+      const cleanedMessages =
+        lastMsg && lastMsg.role === 'assistant' && !lastMsg.content.trim()
+          ? state.messages.slice(0, -1)
+          : state.messages;
+      return {
+        ...state,
+        messages: cleanedMessages,
+        isLoading: false,
+      };
+    }
 
     case 'SUBMIT_SUCCESS': {
       const updatedSessions = state.sessions.filter(
@@ -232,7 +314,26 @@ export function useChatState() {
     };
   }, []);
 
-  // Submit Message handler (handles trimmed check, loading check, and optimistic append)
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Clean up stream reader on unmount
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
+    };
+  }, []);
+
+  // Cancellation handler to abort in-flight stream
+  const cancelCurrentRequest = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    dispatch({ type: 'CANCEL_REQUEST' });
+  }, []);
+
+  // Submit Message handler (handles incremental streaming, abort controller, and progressive updates)
   const submitMessage = useCallback(
     async (rawContent?: string) => {
       const text = (rawContent !== undefined ? rawContent : state.input).trim();
@@ -245,41 +346,109 @@ export function useChatState() {
 
       const currentScopes = activeScopeIdsRef.current;
 
+      // Abort any existing in-flight stream before starting a new one
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      const userMessageId = `local_user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const assistantMessageId = `streaming_assistant_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+
       // Rule 4: Submitted messages appear in the conversation immediately
-      const optimisticMessage: ChatMessage = {
-        id: `local_user_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      const optimisticUserMessage: ChatMessage = {
+        id: userMessageId,
         role: 'user',
         content: text,
         timestamp: new Date().toISOString(),
         contextScopeIds: currentScopes,
       };
 
+      const assistantPlaceholder: ChatMessage = {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toISOString(),
+        contextScopeIds: currentScopes,
+      };
+
       dispatch({
         type: 'SUBMIT_START',
-        payload: { message: optimisticMessage, rawText: text },
+        payload: {
+          userMessage: optimisticUserMessage,
+          assistantPlaceholder,
+          rawText: text,
+        },
       });
 
       try {
-        const result = await chatClient.sendMessage({
-          sessionId: state.activeSessionId,
-          message: text,
-          activeContextScopeIds: currentScopes,
-        });
-
-        dispatch({
-          type: 'SUBMIT_SUCCESS',
-          payload: {
-            assistantMessage: result.assistantMessage,
-            session: result.session,
+        await chatClient.streamMessage(
+          {
+            sessionId: state.activeSessionId,
+            message: text,
+            activeContextScopeIds: currentScopes,
           },
-        });
-      } catch (err) {
+          {
+            onDelta: (data) => {
+              dispatch({
+                type: 'STREAM_DELTA',
+                payload: {
+                  assistantMessageId,
+                  text: data.text,
+                },
+              });
+            },
+            onDone: (data) => {
+              dispatch({
+                type: 'STREAM_SUCCESS',
+                payload: {
+                  assistantMessageId,
+                  assistantMessage: data.assistantMessage,
+                  session: data.session,
+                },
+              });
+            },
+            onError: (errData) => {
+              dispatch({
+                type: 'STREAM_ERROR',
+                payload: {
+                  assistantMessageId,
+                  error: errData.message,
+                },
+              });
+            },
+            onNonStreaming: (payload) => {
+              dispatch({
+                type: 'STREAM_SUCCESS',
+                payload: {
+                  assistantMessageId,
+                  assistantMessage: payload.assistantMessage,
+                  session: payload.session,
+                },
+              });
+            },
+          },
+          { signal: controller.signal }
+        );
+      } catch (err: unknown) {
+        if (controller.signal.aborted) {
+          // Explicitly cancelled by user, state already cleaned up
+          return;
+        }
         const errorMessage =
           err instanceof Error
             ? err.message
-            : 'An unexpected error occurred while sending your message.';
+            : 'An unexpected error occurred while streaming your message.';
         // Rule 9: Errors are displayed clearly and can be retried where appropriate
-        dispatch({ type: 'SUBMIT_ERROR', payload: errorMessage });
+        dispatch({
+          type: 'STREAM_ERROR',
+          payload: { assistantMessageId, error: errorMessage },
+        });
+      } finally {
+        if (abortControllerRef.current === controller) {
+          abortControllerRef.current = null;
+        }
       }
     },
     [state.input, state.isLoading, state.activeSessionId]
@@ -357,6 +526,7 @@ export function useChatState() {
     setInput,
     submitMessage,
     retryLastMessage,
+    cancelCurrentRequest,
     startNewChat,
     selectSession,
     deleteSession,

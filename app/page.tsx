@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { useChatState } from '@/hooks/useChatState';
 import { AppHeader } from '@/components/layout/AppHeader';
 import { CollapsibleSidebar } from '@/components/sidebar/CollapsibleSidebar';
@@ -8,12 +8,16 @@ import { ContextSelector } from '@/components/context/ContextSelector';
 import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { MessageList } from '@/components/chat/MessageList';
 import { MessageComposer } from '@/components/chat/MessageComposer';
+import { DocumentUpload } from '@/components/DocumentUpload';
+import type { ContextType } from '@/lib/types';
 
 export default function ChatbotPage() {
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const {
     state,
     submitMessage,
     retryLastMessage,
+    cancelCurrentRequest,
     startNewChat,
     selectSession,
     deleteSession,
@@ -22,6 +26,15 @@ export default function ChatbotPage() {
     toggleSidebar,
     setMobileNav,
   } = useChatState();
+
+  const defaultUploadContext: ContextType =
+    state.activeScopeIds.includes('scope_solar') && !state.activeScopeIds.includes('scope_nec')
+      ? 'WATTMONK'
+      : state.activeScopeIds.includes('scope_general') &&
+        !state.activeScopeIds.includes('scope_nec') &&
+        !state.activeScopeIds.includes('scope_solar')
+      ? 'GENERAL'
+      : 'NEC';
 
   return (
     <div className="min-h-screen flex bg-slate-950 text-slate-100 overflow-hidden">
@@ -45,6 +58,7 @@ export default function ChatbotPage() {
           onToggleDesktopSidebar={toggleSidebar}
           isSidebarCollapsed={state.isSidebarCollapsed}
           onNewChat={startNewChat}
+          onOpenUploadModal={() => setIsUploadModalOpen(true)}
           activeContextCount={state.activeScopeIds.length}
         />
 
@@ -87,8 +101,16 @@ export default function ChatbotPage() {
           activeScopeIds={state.activeScopeIds}
           isLoading={state.isLoading}
           onSendMessage={submitMessage}
+          onCancel={cancelCurrentRequest}
         />
       </div>
+
+      {/* PDF Document Upload Modal */}
+      <DocumentUpload
+        isOpen={isUploadModalOpen}
+        onClose={() => setIsUploadModalOpen(false)}
+        defaultContext={defaultUploadContext}
+      />
     </div>
   );
 }

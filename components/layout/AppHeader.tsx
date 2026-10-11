@@ -1,13 +1,14 @@
 'use client';
 
 import React from 'react';
-import { Menu, Plus, PanelLeftOpen, Layers, ShieldCheck } from 'lucide-react';
+import { Menu, Plus, PanelLeftOpen, Layers, UploadCloud } from 'lucide-react';
 
 interface AppHeaderProps {
   onOpenMobileNav: () => void;
   onToggleDesktopSidebar: () => void;
   isSidebarCollapsed: boolean;
   onNewChat: () => void;
+  onOpenUploadModal?: () => void;
   activeContextCount: number;
 }
 
@@ -16,6 +17,7 @@ export function AppHeader({
   onToggleDesktopSidebar,
   isSidebarCollapsed,
   onNewChat,
+  onOpenUploadModal,
   activeContextCount,
 }: AppHeaderProps) {
   return (
@@ -64,6 +66,18 @@ export function AppHeader({
           <span className="text-slate-500">Contexts:</span>
           <span className="font-semibold text-indigo-400">{activeContextCount} active</span>
         </div>
+
+        {onOpenUploadModal && (
+          <button
+            type="button"
+            onClick={onOpenUploadModal}
+            aria-label="Upload PDF document"
+            className="flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-medium border border-slate-700/80 transition-colors shadow-xs"
+          >
+            <UploadCloud className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden sm:inline">Upload PDF</span>
+          </button>
+        )}
 
         <button
           type="button"

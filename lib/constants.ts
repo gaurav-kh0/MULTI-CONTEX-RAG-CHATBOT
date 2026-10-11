@@ -1,4 +1,4 @@
-import { ContextScope } from '@/lib/types';
+import type { ContextScope } from './types.ts';
 
 export interface SuggestedQuestion {
   id: string;

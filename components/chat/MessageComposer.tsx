@@ -2,13 +2,14 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ContextScope } from '@/lib/types';
-import { Send, Zap, Sun, BookOpen, Sparkles, Loader2 } from 'lucide-react';
+import { Send, Zap, Sun, BookOpen, Sparkles, Loader2, Square } from 'lucide-react';
 
 interface MessageComposerProps {
   scopes: ContextScope[];
   activeScopeIds: string[];
   isLoading: boolean;
   onSendMessage: (content: string) => void;
+  onCancel?: () => void;
   placeholder?: string;
 }
 
@@ -17,6 +18,7 @@ export function MessageComposer({
   activeScopeIds,
   isLoading,
   onSendMessage,
+  onCancel,
   placeholder,
 }: MessageComposerProps) {
   const [content, setContent] = useState('');
@@ -121,24 +123,36 @@ export function MessageComposer({
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={isSubmitDisabled}
-            aria-label={isLoading ? 'Sending message...' : 'Send message'}
-            className="h-11 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-medium text-xs transition-all flex items-center justify-center gap-1.5 shrink-0 shadow-sm shadow-indigo-600/20 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
-                <span className="hidden sm:inline">Sending</span>
-              </>
-            ) : (
-              <>
-                <Send className="w-4 h-4" />
-                <span className="hidden sm:inline">Send</span>
-              </>
-            )}
-          </button>
+          {isLoading && onCancel ? (
+            <button
+              type="button"
+              onClick={onCancel}
+              aria-label="Stop generating message"
+              className="h-11 px-4 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-medium text-xs transition-all flex items-center justify-center gap-1.5 shrink-0 shadow-sm shadow-rose-600/20 focus:outline-none focus:ring-2 focus:ring-rose-500"
+            >
+              <Square className="w-3.5 h-3.5 fill-current" />
+              <span className="hidden sm:inline">Stop</span>
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={isSubmitDisabled}
+              aria-label={isLoading ? 'Sending message...' : 'Send message'}
+              className="h-11 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-600 text-white font-medium text-xs transition-all flex items-center justify-center gap-1.5 shrink-0 shadow-sm shadow-indigo-600/20 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                  <span className="hidden sm:inline">Sending</span>
+                </>
+              ) : (
+                <>
+                  <Send className="w-4 h-4" />
+                  <span className="hidden sm:inline">Send</span>
+                </>
+              )}
+            </button>
+          )}
         </form>
       </div>
     </div>

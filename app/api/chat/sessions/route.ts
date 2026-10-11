@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { defaultChatService } from '@/backend/services';
+import { chatService } from '@/backend/services/chat-service';
 import { createApiSuccessResponse, createApiErrorResponse } from '@/lib/validation';
 
 export async function GET() {
   try {
-    const sessions = await defaultChatService.listSessions();
+    const sessions = await chatService.listSessions();
     return NextResponse.json(createApiSuccessResponse(sessions));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal Server Error';
@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
       // Body is optional when creating a new session
     }
 
-    const session = await defaultChatService.createSession(title);
+    const session = await chatService.createSession(title);
     return NextResponse.json(createApiSuccessResponse(session), { status: 201 });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal Server Error';

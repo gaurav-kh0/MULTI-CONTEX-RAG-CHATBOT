@@ -14,7 +14,7 @@ export type ContextType = 'NEC' | 'WATTMONK' | 'GENERAL';
 export const CONTEXT_TYPES: readonly ContextType[] = ['NEC', 'WATTMONK', 'GENERAL'] as const;
 
 export type ContextSourceType = 'file' | 'url' | 'text' | 'document' | 'manual';
-export type DocumentStatus = 'idle' | 'processing' | 'indexed' | 'error';
+export type DocumentStatus = 'idle' | 'uploaded' | 'processing' | 'indexed' | 'error';
 
 export interface ContextScope {
   id: string;
@@ -31,9 +31,19 @@ export interface ContextScope {
 // 2. Providers
 // ---------------------------------------------------------------------------
 
-export type ProviderId = 'openai' | 'anthropic' | 'ollama' | 'mock';
+export type ProviderId =
+  | 'gemini'
+  | 'openrouter'
+  | 'nvidia'
+  | 'openai'
+  | 'anthropic'
+  | 'ollama'
+  | 'mock';
 
 export const PROVIDER_IDS: readonly ProviderId[] = [
+  'gemini',
+  'openrouter',
+  'nvidia',
   'openai',
   'anthropic',
   'ollama',
@@ -41,7 +51,7 @@ export const PROVIDER_IDS: readonly ProviderId[] = [
 ] as const;
 
 export type LlmProviderType = ProviderId;
-export type EmbeddingProviderType = 'openai' | 'ollama' | 'mock';
+export type EmbeddingProviderType = 'openai' | 'ollama' | 'mock' | 'gemini';
 
 export interface TokenUsage {
   promptTokens: number;
@@ -268,6 +278,8 @@ export interface ChatRequest {
   activeContextScopeIds?: string[];
   sessionId?: string;
   providerId?: ProviderId;
+  model?: string;
+  stream?: boolean;
   topK?: number;
 }
 

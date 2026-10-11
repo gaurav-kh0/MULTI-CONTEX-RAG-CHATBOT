@@ -115,7 +115,18 @@ export function MessageBubble({ message }: MessageBubbleProps) {
               : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-sm'
           }`}
         >
-          {renderFormattedContent(message.content)}
+          {message.content ? (
+            renderFormattedContent(message.content)
+          ) : (
+            <div className="flex items-center gap-2 text-slate-400 py-0.5" aria-label="Generating response">
+              <div className="flex gap-1 items-center">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce [animation-delay:-0.3s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce [animation-delay:-0.15s]" />
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" />
+              </div>
+              <span className="text-xs text-slate-400">Synthesizing response...</span>
+            </div>
+          )}
         </div>
 
         {/* Retrieved Citations Section */}
