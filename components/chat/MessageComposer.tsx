@@ -1,8 +1,20 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { ContextScope } from '@/lib/types';
-import { Send, Zap, Sun, BookOpen, Sparkles, Loader2, Square } from 'lucide-react';
+import { ContextScope, ContextDocument } from '@/lib/types';
+import {
+  Send,
+  Zap,
+  Sun,
+  BookOpen,
+  Sparkles,
+  Loader2,
+  Square,
+  FileText,
+  ShieldCheck,
+  ShieldAlert,
+  X,
+} from 'lucide-react';
 
 interface MessageComposerProps {
   scopes: ContextScope[];
@@ -11,6 +23,11 @@ interface MessageComposerProps {
   onSendMessage: (content: string) => void;
   onCancel?: () => void;
   placeholder?: string;
+  documents?: ContextDocument[];
+  selectedDocumentId?: string;
+  onSelectDocument?: (documentId: string | undefined) => void;
+  documentOnly?: boolean;
+  onToggleDocumentOnly?: (enabled: boolean) => void;
 }
 
 export function MessageComposer({
@@ -20,6 +37,11 @@ export function MessageComposer({
   onSendMessage,
   onCancel,
   placeholder,
+  documents = [],
+  selectedDocumentId,
+  onSelectDocument,
+  documentOnly = false,
+  onToggleDocumentOnly,
 }: MessageComposerProps) {
   const [content, setContent] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -65,18 +87,23 @@ export function MessageComposer({
     }
   };
 
-  const defaultPlaceholder =
-    activeScopeIds.length === 0
-      ? 'Type a question (no context space targeted)...'
-      : `Ask a question targeting ${activeScopeIds.length} active context space(s)...`;
+  const selectedDoc = documents.find((d) => d.id === selectedDocumentId);
+
+  const defaultPlaceholder = selectedDoc
+    ? documentOnly
+      ? `Ask a question strictly from "${selectedDoc.name}"...`
+      : `Ask a question regarding "${selectedDoc.name}"...`
+    : activeScopeIds.length === 0
+    ? 'Type a question (no context space targeted)...'
+    : `Ask a question targeting ${activeScopeIds.length} active context space(s)...`;
 
   const isSubmitDisabled = !content.trim() || isLoading;
 
   return (
     <div className="p-3 sm:p-4 border-t border-slate-800 bg-slate-900/60 backdrop-blur shrink-0">
-      <div className="max-w-3xl mx-auto space-y-2">
+      <div className="max-w-3xl mx-auto space-y-2.5">
         {/* Active Context Chips Header */}
-        <div className="flex items-center justify-between text-[11px] px-1">
+        <div className="flex items-center justify-between text-[11px] px-1 flex-wrap gap-2">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-slate-400 flex items-center gap-1">
               <Sparkles className="w-3 h-3 text-indigo-400" />
@@ -102,10 +129,108 @@ export function MessageComposer({
               })
             )}
           </div>
+
           <span className="hidden sm:inline-flex text-[10px] text-slate-500 items-center gap-1">
             <span>Shift + Enter for new line • Enter to send</span>
           </span>
         </div>
+
+        {/* Document Targeting and Strict Mode Controls */}
+        <div className="flex items-center justify-between text-xs px-1 gap-2 flex-wrap">
+          {/* Target PDF Selector */}
+          <div className="flex items-center gap-1.5 min-w-0 max-w-full">
+            <label htmlFor="target-document-select" className="text-slate-400 flex items-center gap-1 text-[11px] shrink-0">
+              <FileText className="w-3.5 h-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Target PDF:</span>
+            </label>
+            <div className="relative inline-flex items-center">
+              <select
+                id="target-document-select"
+                value={selectedDocumentId || 'all'}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  onSelectDocument?.(val === 'all' ? undefined : val);
+                }}
+                disabled={isLoading}
+                className="bg-slate-950 border border-slate-800 text-slate-200 text-[11px] rounded-lg px-2.5 py-1 focus:outline-none focus:ring-1 focus:ring-indigo-500 pr-7 truncate max-w-[200px] sm:max-w-[320px] cursor-pointer hover:border-slate-700"
+              >
+                <option value="all">All Documents in Active Scope</option>
+                {documents.map((doc) => {
+                  const ctx = (doc.metadata?.contextType || doc.metadata?.context || 'GENERAL') as string;
+                  const isUploaded = doc.metadata?.provenance === 'uploaded' || !doc.metadata?.isBuiltInSample;
+                  return (
+                    <option key={doc.id} value={doc.id}>
+                      {isUploaded ? '📄 ' : '📖 '}
+                      {doc.name} [{ctx}]
+                    </option>
+                  );
+                })}
+              </select>
+              {selectedDocumentId && (
+                <button
+                  type="button"
+                  onClick={() => onSelectDocument?.(undefined)}
+                  title="Clear document target"
+                  className="absolute right-2 text-slate-400 hover:text-rose-400 transition-colors"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Strict PDF Mode Toggle */}
+          {onToggleDocumentOnly && (
+            <button
+              type="button"
+              onClick={() => onToggleDocumentOnly(!documentOnly)}
+              disabled={isLoading}
+              title={
+                documentOnly
+                  ? 'Strict PDF Only is ACTIVE: Responses strictly derived from indexed PDF. General LLM fallback is disabled.'
+                  : 'Strict PDF Only is OFF: If document evidence is missing, model will provide general engineering answers.'
+              }
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all ${
+                documentOnly
+                  ? 'bg-emerald-950/70 border-emerald-500/40 text-emerald-300 shadow-sm shadow-emerald-950'
+                  : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700'
+              }`}
+            >
+              {documentOnly ? (
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Strict PDF Mode: ON</span>
+                </>
+              ) : (
+                <>
+                  <ShieldAlert className="w-3.5 h-3.5 text-slate-500" />
+                  <span>Strict PDF Mode: OFF</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
+
+        {/* Selected Document Indicator Banner */}
+        {selectedDoc && (
+          <div className="flex items-center justify-between text-[11px] px-2.5 py-1 rounded-lg bg-indigo-950/40 border border-indigo-500/30 text-indigo-200">
+            <span className="truncate">
+              Targeting: <strong className="text-white">{selectedDoc.name}</strong>
+              {documentOnly && (
+                <span className="ml-2 text-emerald-400 text-[10px] font-semibold">
+                  (Strict Mode: Only this PDF is used)
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={() => onSelectDocument?.(undefined)}
+              className="text-slate-400 hover:text-slate-200 ml-2 text-[10px] underline shrink-0"
+            >
+              Reset to all
+            </button>
+          </div>
+        )}
 
         {/* Input Form */}
         <form onSubmit={handleSubmit} className="relative flex items-end gap-2">

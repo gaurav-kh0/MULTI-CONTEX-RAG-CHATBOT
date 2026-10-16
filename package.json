@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types --test test/validation.test.ts test/providers.test.ts test/chat-service.test.ts test/stream-parser.test.ts test/day2-audit.test.ts test/document-upload.test.ts test/extraction-chunker.test.ts test/embeddings.test.ts test/pinecone.test.ts test/document-ingestion.test.ts test/day3-audit.test.ts"
+    "test": "node --experimental-strip-types --test test/validation.test.ts test/providers.test.ts test/chat-service.test.ts test/stream-parser.test.ts test/day2-audit.test.ts test/document-upload.test.ts test/extraction-chunker.test.ts test/embeddings.test.ts test/pinecone.test.ts test/document-ingestion.test.ts test/day3-audit.test.ts test/retriever.test.ts test/rag-pipeline.test.ts test/source-citations.test.ts test/search-service.test.ts test/rag-integration-audit.test.ts"
   },
   "dependencies": {
     "@google/genai": "^2.28.0",

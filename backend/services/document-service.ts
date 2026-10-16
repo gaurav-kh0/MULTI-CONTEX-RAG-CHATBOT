@@ -51,6 +51,10 @@ import {
   getActiveVectorStore,
   InMemoryVectorStore,
 } from '../storage/index.ts';
+import {
+  seedCuratedKnowledgeToVectorStore,
+  SAMPLE_DISCLAIMER_NOTICE,
+} from '../rag/curated-knowledge.ts';
 
 export interface DocumentServiceConfig {
   storageDir?: string;
@@ -112,8 +116,13 @@ export class DocumentService {
         updatedAt: new Date(Date.now() - 86400000).toISOString(),
         metadata: {
           contextType: 'NEC',
+          context: 'NEC',
           title: 'NEC 2023 Article 690 - Solar Photovoltaic Systems',
           author: 'NFPA',
+          isBuiltInSample: true,
+          isAuthoritative: false,
+          provenance: 'built-in-sample',
+          disclaimer: SAMPLE_DISCLAIMER_NOTICE,
         },
       },
       {
@@ -129,8 +138,13 @@ export class DocumentService {
         updatedAt: new Date(Date.now() - 86400000).toISOString(),
         metadata: {
           contextType: 'NEC',
+          context: 'NEC',
           title: 'NEC 2023 Article 705 - Interconnected Power Sources',
           author: 'NFPA',
+          isBuiltInSample: true,
+          isAuthoritative: false,
+          provenance: 'built-in-sample',
+          disclaimer: SAMPLE_DISCLAIMER_NOTICE,
         },
       },
       {
@@ -146,8 +160,13 @@ export class DocumentService {
         updatedAt: new Date(Date.now() - 43200000).toISOString(),
         metadata: {
           contextType: 'WATTMONK',
+          context: 'WATTMONK',
           title: 'Wattmonk AHJ Permit Plan Set Standards',
           author: 'Wattmonk Engineering Team',
+          isBuiltInSample: true,
+          isAuthoritative: false,
+          provenance: 'built-in-sample',
+          disclaimer: SAMPLE_DISCLAIMER_NOTICE,
         },
       },
       {
@@ -163,7 +182,12 @@ export class DocumentService {
         updatedAt: new Date(Date.now() - 21600000).toISOString(),
         metadata: {
           contextType: 'GENERAL',
+          context: 'GENERAL',
           title: 'General Electrical Safety & Building Code Guidelines',
+          isBuiltInSample: true,
+          isAuthoritative: false,
+          provenance: 'built-in-sample',
+          disclaimer: SAMPLE_DISCLAIMER_NOTICE,
         },
       },
     ];
@@ -214,6 +238,13 @@ export class DocumentService {
   clear(): void {
     this.documents.clear();
     this.seedDefaultDocuments();
+  }
+
+  /**
+   * Seeds curated knowledge chunks for built-in documents into the active vector store.
+   */
+  async seedCuratedKnowledge(): Promise<number> {
+    return seedCuratedKnowledgeToVectorStore(this.vectorStore);
   }
 
   /**
@@ -295,6 +326,7 @@ export class DocumentService {
       updatedAt: new Date().toISOString(),
       metadata: {
         contextType: params.contextType,
+        context: params.contextType,
         title: displayName,
         author: params.author?.trim(),
         sourceUrl: params.sourceUrl?.trim(),
@@ -304,6 +336,9 @@ export class DocumentService {
         sha256: processedMeta.sha256,
         pageCount: processedMeta.pageCount,
         pdfVersion: processedMeta.pdfVersion,
+        isBuiltInSample: false,
+        isAuthoritative: true,
+        provenance: 'uploaded',
       },
     };
 
@@ -343,8 +378,12 @@ export class DocumentService {
           filename: processedMeta.sanitizedFilename,
           originalFilename: processedMeta.originalFilename,
           context: params.contextType,
+          contextType: params.contextType,
           title: displayName,
           author: params.author?.trim(),
+          isBuiltInSample: false,
+          isAuthoritative: true,
+          provenance: 'uploaded',
         }
       );
 
@@ -518,4 +557,11 @@ export class DocumentService {
   }
 }
 
-export const documentService = new DocumentService();
+const globalForDocumentService = globalThis as unknown as {
+  documentService?: DocumentService;
+};
+
+export const documentService =
+  globalForDocumentService.documentService ?? new DocumentService();
+
+globalForDocumentService.documentService = documentService;

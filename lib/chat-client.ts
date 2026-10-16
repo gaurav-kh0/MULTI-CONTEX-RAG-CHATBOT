@@ -31,6 +31,21 @@ export class ChatClient {
     return body.data;
   }
 
+  async fetchDocuments(contextType?: string): Promise<import('./types.ts').ContextDocument[]> {
+    const url = contextType
+      ? `${this.baseApiUrl}/documents?contextType=${encodeURIComponent(contextType)}`
+      : `${this.baseApiUrl}/documents`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      throw new Error(`Failed to load documents (Status: ${res.status})`);
+    }
+    const body = (await res.json()) as ApiResponse<import('./types.ts').ContextDocument[]>;
+    if (!body.success) {
+      throw new Error(body.error.message || 'Invalid document data received.');
+    }
+    return body.data;
+  }
+
   async fetchSessions(): Promise<ChatSession[]> {
     const res = await fetch(`${this.baseApiUrl}/chat/sessions`);
     if (!res.ok) {

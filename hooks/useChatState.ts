@@ -1,7 +1,7 @@
 'use client';
 
 import { useReducer, useEffect, useCallback, useRef } from 'react';
-import type { ChatMessage, ChatSession, ContextScope } from '../lib/types.ts';
+import type { ChatMessage, ChatSession, ContextScope, ContextType, ContextDocument } from '../lib/types.ts';
 import { INITIAL_CONTEXT_SCOPES } from '../lib/constants.ts';
 import { chatClient } from '../lib/chat-client.ts';
 
@@ -15,6 +15,9 @@ export interface ChatState {
   messages: ChatMessage[];
   scopes: ContextScope[];
   activeScopeIds: string[];
+  documents: ContextDocument[];
+  selectedDocumentId?: string;
+  documentOnly: boolean;
   input: string;
   isLoading: boolean;
   error: string | null;
@@ -57,6 +60,9 @@ export type ChatAction =
   | { type: 'SUBMIT_ERROR'; payload: string }
   | { type: 'TOGGLE_SCOPE'; payload: string }
   | { type: 'SET_SCOPES'; payload: ContextScope[] }
+  | { type: 'SET_DOCUMENTS'; payload: ContextDocument[] }
+  | { type: 'SET_SELECTED_DOCUMENT'; payload: string | undefined }
+  | { type: 'SET_DOCUMENT_ONLY'; payload: boolean }
   | { type: 'SET_SESSIONS'; payload: ChatSession[] }
   | { type: 'SELECT_SESSION'; payload: string }
   | { type: 'NEW_CHAT'; payload?: { sessionId?: string } }
@@ -75,6 +81,9 @@ export const initialState: ChatState = {
   messages: [],
   scopes: INITIAL_CONTEXT_SCOPES,
   activeScopeIds: ['scope_nec', 'scope_solar'],
+  documents: [],
+  selectedDocumentId: undefined,
+  documentOnly: false,
   input: '',
   isLoading: false,
   error: null,
@@ -198,6 +207,41 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       };
     }
 
+    case 'SET_DOCUMENTS':
+      return { ...state, documents: action.payload };
+
+    case 'SET_SELECTED_DOCUMENT': {
+      const docId = action.payload;
+      if (!docId || docId === 'all') {
+        return { ...state, selectedDocumentId: undefined };
+      }
+      const targetDoc = state.documents.find((d) => d.id === docId);
+      const docContext = (targetDoc?.metadata?.contextType || targetDoc?.metadata?.context) as ContextType | undefined;
+
+      let nextScopeIds = [...state.activeScopeIds];
+      if (docContext) {
+        const contextToScopeMap: Record<ContextType, string> = {
+          NEC: 'scope_nec',
+          WATTMONK: 'scope_solar',
+          GENERAL: 'scope_general',
+        };
+        const neededScopeId = contextToScopeMap[docContext];
+        if (neededScopeId && !nextScopeIds.includes(neededScopeId)) {
+          nextScopeIds = [...nextScopeIds, neededScopeId];
+        }
+      }
+
+      return {
+        ...state,
+        selectedDocumentId: docId,
+        activeScopeIds: nextScopeIds,
+        documentOnly: true,
+      };
+    }
+
+    case 'SET_DOCUMENT_ONLY':
+      return { ...state, documentOnly: action.payload };
+
     case 'SET_SESSIONS': {
       const sessions = action.payload;
       if (sessions.length > 0 && !state.activeSessionId) {
@@ -290,9 +334,10 @@ export function useChatState() {
 
     async function initialize() {
       try {
-        const [loadedScopes, loadedSessions] = await Promise.all([
+        const [loadedScopes, loadedSessions, loadedDocs] = await Promise.all([
           chatClient.fetchContextScopes().catch(() => INITIAL_CONTEXT_SCOPES),
           chatClient.fetchSessions().catch(() => []),
+          chatClient.fetchDocuments().catch(() => []),
         ]);
 
         if (mounted) {
@@ -301,6 +346,9 @@ export function useChatState() {
           }
           if (loadedSessions.length > 0) {
             dispatch({ type: 'SET_SESSIONS', payload: loadedSessions });
+          }
+          if (loadedDocs.length > 0) {
+            dispatch({ type: 'SET_DOCUMENTS', payload: loadedDocs });
           }
         }
       } catch (err) {
@@ -383,11 +431,32 @@ export function useChatState() {
       });
 
       try {
+        const scopeToContextMap: Record<string, ContextType> = {
+          scope_nec: 'NEC',
+          scope_solar: 'WATTMONK',
+          scope_general: 'GENERAL',
+        };
+        const activeContexts = currentScopes
+          .map((id) => scopeToContextMap[id])
+          .filter(Boolean) as ContextType[];
+
+        // If a specific document is targeted, ensure its context is present in activeContexts
+        if (state.selectedDocumentId) {
+          const doc = state.documents.find((d) => d.id === state.selectedDocumentId);
+          const docCtx = (doc?.metadata?.contextType || doc?.metadata?.context) as ContextType | undefined;
+          if (docCtx && !activeContexts.includes(docCtx)) {
+            activeContexts.push(docCtx);
+          }
+        }
+
         await chatClient.streamMessage(
           {
             sessionId: state.activeSessionId,
             message: text,
             activeContextScopeIds: currentScopes,
+            contexts: activeContexts.length > 0 ? activeContexts : undefined,
+            documentId: state.selectedDocumentId && state.selectedDocumentId !== 'all' ? state.selectedDocumentId : undefined,
+            documentOnly: state.documentOnly,
           },
           {
             onDelta: (data) => {
@@ -451,7 +520,14 @@ export function useChatState() {
         }
       }
     },
-    [state.input, state.isLoading, state.activeSessionId]
+    [
+      state.input,
+      state.isLoading,
+      state.activeSessionId,
+      state.selectedDocumentId,
+      state.documentOnly,
+      state.documents,
+    ]
   );
 
   // Retry the last failed message
@@ -521,6 +597,26 @@ export function useChatState() {
     dispatch({ type: 'SET_MOBILE_NAV', payload: isOpen });
   }, []);
 
+  // Document Management callbacks
+  const refreshDocuments = useCallback(async () => {
+    try {
+      const docs = await chatClient.fetchDocuments();
+      dispatch({ type: 'SET_DOCUMENTS', payload: docs });
+      return docs;
+    } catch (err) {
+      console.error('Failed to refresh documents:', err);
+      return [];
+    }
+  }, []);
+
+  const setSelectedDocumentId = useCallback((docId: string | undefined) => {
+    dispatch({ type: 'SET_SELECTED_DOCUMENT', payload: docId });
+  }, []);
+
+  const setDocumentOnly = useCallback((enabled: boolean) => {
+    dispatch({ type: 'SET_DOCUMENT_ONLY', payload: enabled });
+  }, []);
+
   return {
     state,
     setInput,
@@ -534,5 +630,8 @@ export function useChatState() {
     selectSuggestedQuestion,
     toggleSidebar,
     setMobileNav,
+    refreshDocuments,
+    setSelectedDocumentId,
+    setDocumentOnly,
   };
 }

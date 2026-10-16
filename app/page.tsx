@@ -9,10 +9,12 @@ import { WelcomeScreen } from '@/components/chat/WelcomeScreen';
 import { MessageList } from '@/components/chat/MessageList';
 import { MessageComposer } from '@/components/chat/MessageComposer';
 import { DocumentUpload } from '@/components/DocumentUpload';
+import { DocumentSearch } from '@/components/DocumentSearch';
 import type { ContextType } from '@/lib/types';
 
 export default function ChatbotPage() {
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const {
     state,
     submitMessage,
@@ -25,6 +27,9 @@ export default function ChatbotPage() {
     selectSuggestedQuestion,
     toggleSidebar,
     setMobileNav,
+    refreshDocuments,
+    setSelectedDocumentId,
+    setDocumentOnly,
   } = useChatState();
 
   const defaultUploadContext: ContextType =
@@ -59,6 +64,7 @@ export default function ChatbotPage() {
           isSidebarCollapsed={state.isSidebarCollapsed}
           onNewChat={startNewChat}
           onOpenUploadModal={() => setIsUploadModalOpen(true)}
+          onOpenSearchModal={() => setIsSearchModalOpen(true)}
           activeContextCount={state.activeScopeIds.length}
         />
 
@@ -99,6 +105,11 @@ export default function ChatbotPage() {
         <MessageComposer
           scopes={state.scopes}
           activeScopeIds={state.activeScopeIds}
+          documents={state.documents}
+          selectedDocumentId={state.selectedDocumentId}
+          onSelectDocument={setSelectedDocumentId}
+          documentOnly={state.documentOnly}
+          onToggleDocumentOnly={setDocumentOnly}
           isLoading={state.isLoading}
           onSendMessage={submitMessage}
           onCancel={cancelCurrentRequest}
@@ -110,6 +121,20 @@ export default function ChatbotPage() {
         isOpen={isUploadModalOpen}
         onClose={() => setIsUploadModalOpen(false)}
         defaultContext={defaultUploadContext}
+        onUploadSuccess={(payload) => {
+          refreshDocuments();
+          if (payload?.document?.id) {
+            setSelectedDocumentId(payload.document.id);
+          }
+        }}
+      />
+
+      {/* Semantic Document Search Modal */}
+      <DocumentSearch
+        isOpen={isSearchModalOpen}
+        onClose={() => setIsSearchModalOpen(false)}
+        defaultContext={defaultUploadContext}
+        onAskInChat={(prompt) => submitMessage(prompt)}
       />
     </div>
   );

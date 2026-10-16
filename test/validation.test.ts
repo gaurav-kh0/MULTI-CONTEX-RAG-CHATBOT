@@ -262,17 +262,23 @@ describe('validateChatRequest', () => {
 // ---------------------------------------------------------------------------
 // 8. Service Not-Ready State Contracts
 // ---------------------------------------------------------------------------
-describe('Service Not-Ready State Contracts', () => {
-  it('SearchService returns explicit documented not-ready response', async () => {
-    const { searchService } = await import('../backend/services/search-service.ts');
-    const result = await searchService.executeSearch({
-      query: 'What are NEC 690 rapid shutdown rules?',
-      contexts: ['NEC'],
-    });
-
-    assert.equal(result.isReady, false);
-    assert.equal(result.results.length, 0);
-    assert.match(result.statusMessage, /not implemented yet/i);
+describe('Service Readiness and Configuration Guard Contracts', () => {
+  it('SearchService rejects execution with explicit CONFIGURATION_ERROR when unconfigured', async () => {
+    const { searchService, SearchError } = await import('../backend/services/search-service.ts');
+    await assert.rejects(
+      async () => {
+        await searchService.executeSearch({
+          query: 'What are NEC 690 rapid shutdown rules?',
+          contexts: ['NEC'],
+        });
+      },
+      (err: unknown) => {
+        assert.ok(err instanceof SearchError);
+        assert.equal(err.code, 'CONFIGURATION_ERROR');
+        assert.match(err.message, /Embedding provider is not configured/i);
+        return true;
+      }
+    );
   });
 
   it('DocumentService returns explicit status on registration without fake parsing', async () => {

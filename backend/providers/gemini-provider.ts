@@ -155,34 +155,59 @@ export class GeminiProvider implements ILlmProviderAdapter {
       config.topP = request.options.topP;
     }
 
+    let activeModel = model;
+    const fallbackModel = activeModel === 'gemini-3.5-flash' ? 'gemini-3.8-flash' : 'gemini-3.5-flash';
+    let response;
     try {
-      const response = await client.models.generateContent({
-        model,
+      response = await client.models.generateContent({
+        model: activeModel,
         contents,
         config,
       });
+    } catch (firstErr: unknown) {
+      const errMsg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      const isRetriable =
+        errMsg.includes('404') ||
+        errMsg.toLowerCase().includes('not found') ||
+        errMsg.includes('no longer available') ||
+        errMsg.includes('503') ||
+        errMsg.includes('high demand') ||
+        errMsg.includes('UNAVAILABLE');
 
-      const content = response.text ?? '';
-      let usage: ProviderUsage | undefined;
-
-      if (response.usageMetadata) {
-        usage = {
-          promptTokens: response.usageMetadata.promptTokenCount ?? 0,
-          completionTokens: response.usageMetadata.candidatesTokenCount ?? 0,
-          totalTokens: response.usageMetadata.totalTokenCount ?? 0,
-        };
+      if (isRetriable && activeModel !== fallbackModel) {
+        activeModel = fallbackModel;
+        try {
+          response = await client.models.generateContent({
+            model: activeModel,
+            contents,
+            config,
+          });
+        } catch (retryErr) {
+          throw this.mapError(retryErr);
+        }
+      } else {
+        throw this.mapError(firstErr);
       }
-
-      return {
-        content,
-        providerId: this.id,
-        model,
-        usage,
-        raw: response,
-      };
-    } catch (error) {
-      throw this.mapError(error);
     }
+
+    const content = response.text ?? '';
+    let usage: ProviderUsage | undefined;
+
+    if (response.usageMetadata) {
+      usage = {
+        promptTokens: response.usageMetadata.promptTokenCount ?? 0,
+        completionTokens: response.usageMetadata.candidatesTokenCount ?? 0,
+        totalTokens: response.usageMetadata.totalTokenCount ?? 0,
+      };
+    }
+
+    return {
+      content,
+      providerId: this.id,
+      model: activeModel,
+      usage,
+      raw: response,
+    };
   }
 
   async *streamText(request: ProviderGenerateRequest): AsyncIterable<ProviderStreamChunk> {
@@ -218,15 +243,39 @@ export class GeminiProvider implements ILlmProviderAdapter {
       config.topP = request.options.topP;
     }
 
+    let activeModel = model;
+    const fallbackModel = activeModel === 'gemini-3.5-flash' ? 'gemini-3.8-flash' : 'gemini-3.5-flash';
     let responseStream;
     try {
       responseStream = await client.models.generateContentStream({
-        model,
+        model: activeModel,
         contents,
         config,
       });
-    } catch (error) {
-      throw this.mapError(error);
+    } catch (firstErr: unknown) {
+      const errMsg = firstErr instanceof Error ? firstErr.message : String(firstErr);
+      const isRetriable =
+        errMsg.includes('404') ||
+        errMsg.toLowerCase().includes('not found') ||
+        errMsg.includes('no longer available') ||
+        errMsg.includes('503') ||
+        errMsg.includes('high demand') ||
+        errMsg.includes('UNAVAILABLE');
+
+      if (isRetriable && activeModel !== fallbackModel) {
+        activeModel = fallbackModel;
+        try {
+          responseStream = await client.models.generateContentStream({
+            model: activeModel,
+            contents,
+            config,
+          });
+        } catch (retryErr) {
+          throw this.mapError(retryErr);
+        }
+      } else {
+        throw this.mapError(firstErr);
+      }
     }
 
     let aggregatedUsage: ProviderUsage | undefined;
@@ -247,7 +296,7 @@ export class GeminiProvider implements ILlmProviderAdapter {
             text: chunkText,
             done: false,
             providerId: this.id,
-            model,
+            model: activeModel,
           };
         }
       }
@@ -257,7 +306,7 @@ export class GeminiProvider implements ILlmProviderAdapter {
         text: '',
         done: true,
         providerId: this.id,
-        model,
+        model: activeModel,
         usage: aggregatedUsage,
       };
     } catch (error) {

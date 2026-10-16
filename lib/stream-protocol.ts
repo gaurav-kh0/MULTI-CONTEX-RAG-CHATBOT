@@ -64,6 +64,9 @@ export interface ChatStreamDoneData {
   sessionId: string;
   assistantMessage: AssistantChatMessage;
   session: ChatSession;
+  groundingStatus?: import('./types.ts').GroundingStatus;
+  references?: import('./types.ts').SourceReference[];
+  citations?: import('./types.ts').SourceReference[];
 }
 
 export interface ChatStreamErrorData {

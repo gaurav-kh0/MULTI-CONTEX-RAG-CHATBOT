@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Menu, Plus, PanelLeftOpen, Layers, UploadCloud } from 'lucide-react';
+import { Menu, Plus, PanelLeftOpen, Layers, UploadCloud, Search } from 'lucide-react';
 
 interface AppHeaderProps {
   onOpenMobileNav: () => void;
@@ -9,6 +9,7 @@ interface AppHeaderProps {
   isSidebarCollapsed: boolean;
   onNewChat: () => void;
   onOpenUploadModal?: () => void;
+  onOpenSearchModal?: () => void;
   activeContextCount: number;
 }
 
@@ -18,6 +19,7 @@ export function AppHeader({
   isSidebarCollapsed,
   onNewChat,
   onOpenUploadModal,
+  onOpenSearchModal,
   activeContextCount,
 }: AppHeaderProps) {
   return (
@@ -76,6 +78,18 @@ export function AppHeader({
           >
             <UploadCloud className="w-3.5 h-3.5 text-indigo-400" />
             <span className="hidden sm:inline">Upload PDF</span>
+          </button>
+        )}
+
+        {onOpenSearchModal && (
+          <button
+            type="button"
+            onClick={onOpenSearchModal}
+            aria-label="Semantic document search"
+            className="flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white text-xs font-medium border border-slate-700/80 transition-colors shadow-xs"
+          >
+            <Search className="w-3.5 h-3.5 text-indigo-400" />
+            <span className="hidden sm:inline">Search Docs</span>
           </button>
         )}
 

@@ -30,10 +30,12 @@ export class InMemoryVectorStore implements IVectorStore {
   }
 
   async querySimilar(
-    _vector: number[],
+    vector: number[],
     options?: RagQueryOptions
   ): Promise<RagRetrievalResult[]> {
-    const results: RagRetrievalResult[] = [];
+    const candidates: RagRetrievalResult[] = [];
+    const minThreshold = options?.minScoreThreshold ?? -Infinity;
+
     for (const item of this.chunks.values()) {
       if (
         options?.filterScopeIds &&
@@ -51,18 +53,53 @@ export class InMemoryVectorStore implements IVectorStore {
         continue;
       }
 
-      results.push({
+      if (
+        options?.documentId &&
+        options.documentId.trim().length > 0 &&
+        item.chunk.documentId !== options.documentId.trim()
+      ) {
+        continue;
+      }
+
+      // Compute actual cosine similarity if vectors are present, otherwise 1.0
+      let score = 1.0;
+      if (
+        Array.isArray(vector) &&
+        Array.isArray(item.vector) &&
+        vector.length > 0 &&
+        vector.length === item.vector.length
+      ) {
+        let dot = 0;
+        let normA = 0;
+        let normB = 0;
+        for (let i = 0; i < vector.length; i++) {
+          dot += vector[i] * item.vector[i];
+          normA += vector[i] * vector[i];
+          normB += item.vector[i] * item.vector[i];
+        }
+        score = normA > 0 && normB > 0 ? dot / (Math.sqrt(normA) * Math.sqrt(normB)) : 0;
+      }
+
+      if (score < minThreshold) {
+        continue;
+      }
+
+      candidates.push({
         chunk: item.chunk,
-        score: 1.0,
+        score,
         documentName: String(item.chunk.metadata.filename || item.chunk.metadata.title || 'Unknown Document'),
         contextType: item.chunk.metadata.context as ContextType,
       });
-
-      if (options?.topK && results.length >= options.topK) {
-        break;
-      }
     }
-    return results;
+
+    // Sort by actual relevance score descending
+    candidates.sort((a, b) => b.score - a.score);
+
+    if (options?.topK && options.topK > 0) {
+      return candidates.slice(0, options.topK);
+    }
+
+    return candidates;
   }
 
   async deleteByDocumentId(documentId: string): Promise<void> {
@@ -109,8 +146,18 @@ export class InMemoryDocumentStore implements IDocumentStore {
   }
 }
 
-export const inMemoryVectorStore = new InMemoryVectorStore();
-export const defaultDocumentStore = new InMemoryDocumentStore();
+const globalForStorage = globalThis as unknown as {
+  inMemoryVectorStore?: InMemoryVectorStore;
+  defaultDocumentStore?: InMemoryDocumentStore;
+};
+
+export const inMemoryVectorStore =
+  globalForStorage.inMemoryVectorStore ?? new InMemoryVectorStore();
+export const defaultDocumentStore =
+  globalForStorage.defaultDocumentStore ?? new InMemoryDocumentStore();
+
+globalForStorage.inMemoryVectorStore = inMemoryVectorStore;
+globalForStorage.defaultDocumentStore = defaultDocumentStore;
 
 /**
  * Resolves active vector store based on VECTOR_STORE_PROVIDER environment setting.

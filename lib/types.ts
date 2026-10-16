@@ -137,14 +137,27 @@ export interface RetrievedDocument {
 }
 
 export interface SourceReference {
+  /** Unique document identifier */
   documentId: string;
-  documentTitle: string;
-  documentName?: string;
-  contextType: ContextType;
-  snippet: string;
-  score: number;
+  /** Chunk identifier in vector index */
   chunkId: string;
+  /** Verified filename if known */
+  filename?: string;
+  /** Verified document name */
+  documentName?: string;
+  /** Verified document title */
+  documentTitle?: string;
+  /** Page number, only if reliably known from document parser (never invented) */
   pageNumber?: number;
+  /** Actual retrieval score if supplied by vector database (never fabricated) */
+  score?: number;
+  /** Short supporting excerpt */
+  snippet?: string;
+  /** Alias for supporting excerpt */
+  excerpt?: string;
+  /** Context partition */
+  contextType?: ContextType;
+  /** Section heading if available */
   section?: string;
 }
 
@@ -167,12 +180,16 @@ export interface UserChatMessage extends BaseChatMessage {
   role: 'user';
 }
 
+export type GroundingStatus = 'grounded' | 'partially_grounded' | 'not_grounded' | 'declined';
+
 export interface AssistantChatMessage extends BaseChatMessage {
   role: 'assistant';
   citations?: SourceReference[];
   references?: SourceReference[];
   providerId?: ProviderId;
   usage?: TokenUsage;
+  groundingStatus?: GroundingStatus;
+  detectedContexts?: ContextType[];
 }
 
 export interface SystemChatMessage extends BaseChatMessage {
@@ -201,6 +218,8 @@ export interface RagQueryOptions {
   minScoreThreshold?: number;
   filterScopeIds?: string[];
   contexts?: ContextType[];
+  documentId?: string;
+  namespace?: string;
 }
 
 export interface RagRetrievalResult {
@@ -281,6 +300,10 @@ export interface ChatRequest {
   model?: string;
   stream?: boolean;
   topK?: number;
+  documentOnly?: boolean;
+  documentId?: string;
+  minScoreThreshold?: number;
+  autoDetectContext?: boolean;
 }
 
 // Backward-compatible alias
@@ -291,6 +314,9 @@ export interface ChatResponsePayload {
   userMessage: UserChatMessage;
   assistantMessage: AssistantChatMessage;
   references: SourceReference[];
+  citations?: SourceReference[];
+  groundingStatus?: GroundingStatus;
+  detectedContexts?: ContextType[];
   session: ChatSession;
 }
 
@@ -310,20 +336,41 @@ export interface AddDocumentRequest {
   contextType?: ContextType;
 }
 
+export interface SearchResultChunk {
+  chunkId: string;
+  documentId: string;
+  filename: string;
+  documentName?: string;
+  title?: string;
+  pageNumber?: number;
+  score: number;
+  excerpt: string;
+  contextType: ContextType;
+  chunkIndex: number;
+  metadata?: Record<string, unknown>;
+}
+
 export interface SearchRequest {
   query: string;
   contexts?: ContextType[];
+  context?: ContextType;
+  documentId?: string;
+  limit?: number;
   topK?: number;
+  minScoreThreshold?: number;
 }
 
 export interface SearchResponsePayload {
   query: string;
   contexts: ContextType[];
-  results: RetrievedDocument[];
-  isReady: boolean;
-  statusMessage: string;
+  documentId?: string;
+  results: SearchResultChunk[];
+  isReady?: boolean;
+  statusMessage?: string;
   totalResults: number;
 }
+
+export type SearchResponse = ApiResponse<SearchResponsePayload>;
 
 export interface DocumentUploadRequest {
   title: string;

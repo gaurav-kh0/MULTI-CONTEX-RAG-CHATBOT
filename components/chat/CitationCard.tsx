@@ -13,13 +13,16 @@ export function CitationCard({ citation, index }: CitationCardProps) {
   const [copied, setCopied] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
+  const snippetText = citation.snippet || citation.excerpt || '';
+
   const handleCopy = () => {
-    navigator.clipboard.writeText(citation.snippet);
+    if (!snippetText) return;
+    navigator.clipboard.writeText(snippetText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const percentageScore = Math.round(citation.score * 100);
+  const hasScore = typeof citation.score === 'number' && Number.isFinite(citation.score);
 
   return (
     <div className="rounded-lg border border-slate-800 bg-slate-950/70 p-3 space-y-2 text-xs transition-colors hover:border-slate-700">
@@ -30,33 +33,39 @@ export function CitationCard({ citation, index }: CitationCardProps) {
           </span>
           <div className="flex items-center gap-1.5 min-w-0">
             <FileText className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
-            <span className="font-medium text-slate-200 truncate" title={citation.documentTitle || citation.documentName}>
-              {citation.documentTitle || citation.documentName || 'Document Reference'}
+            <span className="font-medium text-slate-200 truncate" title={citation.documentTitle || citation.documentName || citation.filename || citation.documentId}>
+              {citation.documentTitle || citation.documentName || citation.filename || citation.documentId}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-            {percentageScore}% match
-          </span>
-          <button
-            type="button"
-            onClick={handleCopy}
-            aria-label="Copy citation snippet"
-            className="p-1 rounded text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition-colors"
-            title="Copy snippet"
-          >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-          </button>
+          {hasScore && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
+              Score: {citation.score!.toFixed(3)}
+            </span>
+          )}
+          {snippetText && (
+            <button
+              type="button"
+              onClick={handleCopy}
+              aria-label="Copy citation snippet"
+              className="p-1 rounded text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+              title="Copy snippet"
+            >
+              {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            </button>
+          )}
         </div>
       </div>
 
-      <p className={`text-[11px] text-slate-400 leading-relaxed font-mono italic pl-7 ${!isExpanded && 'line-clamp-2'}`}>
-        &ldquo;{citation.snippet}&rdquo;
-      </p>
+      {snippetText && (
+        <p className={`text-[11px] text-slate-400 leading-relaxed font-mono italic pl-7 ${!isExpanded && 'line-clamp-2'}`}>
+          &ldquo;{snippetText}&rdquo;
+        </p>
+      )}
 
-      {citation.snippet.length > 120 && (
+      {snippetText.length > 120 && (
         <button
           type="button"
           onClick={() => setIsExpanded(!isExpanded)}

@@ -362,6 +362,42 @@ export function validateChatRequest(
   // 9. Validate optional stream flag
   const resolvedStream = typeof raw.stream === 'boolean' ? raw.stream : undefined;
 
+  // 10. Validate optional documentOnly flag
+  const resolvedDocumentOnly = typeof raw.documentOnly === 'boolean' ? raw.documentOnly : undefined;
+
+  // 11. Validate optional autoDetectContext flag
+  const resolvedAutoDetectContext =
+    typeof raw.autoDetectContext === 'boolean' ? raw.autoDetectContext : undefined;
+
+  // 12. Validate optional documentId
+  let resolvedDocumentId: string | undefined;
+  if (raw.documentId !== undefined) {
+    const docIdCheck = validateDocumentId(raw.documentId);
+    if (!docIdCheck.valid) {
+      details.push({ field: docIdCheck.field, message: docIdCheck.error });
+    } else {
+      resolvedDocumentId = docIdCheck.value;
+    }
+  }
+
+  // 13. Validate optional minScoreThreshold
+  let resolvedMinScoreThreshold: number | undefined;
+  if (raw.minScoreThreshold !== undefined) {
+    if (
+      typeof raw.minScoreThreshold !== 'number' ||
+      !Number.isFinite(raw.minScoreThreshold) ||
+      raw.minScoreThreshold < 0 ||
+      raw.minScoreThreshold > 1
+    ) {
+      details.push({
+        field: 'minScoreThreshold',
+        message: 'minScoreThreshold must be a number between 0.0 and 1.0.',
+      });
+    } else {
+      resolvedMinScoreThreshold = raw.minScoreThreshold;
+    }
+  }
+
   if (details.length > 0) {
     return {
       valid: false,
@@ -381,6 +417,10 @@ export function validateChatRequest(
       model: resolvedModel,
       stream: resolvedStream,
       topK: resolvedTopK,
+      documentOnly: resolvedDocumentOnly,
+      documentId: resolvedDocumentId,
+      minScoreThreshold: resolvedMinScoreThreshold,
+      autoDetectContext: resolvedAutoDetectContext,
     },
   };
 }

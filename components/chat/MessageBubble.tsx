@@ -2,8 +2,8 @@
 
 import React, { useState } from 'react';
 import { ChatMessage } from '@/lib/types';
-import { CitationCard } from './CitationCard';
-import { User, Bot, Copy, Check, Quote, Zap, Sun, BookOpen } from 'lucide-react';
+import { SourcePanel } from '@/components/SourcePanel';
+import { User, Bot, Copy, Check, Quote, Zap, Sun, BookOpen, ShieldCheck, AlertCircle, Info } from 'lucide-react';
 
 interface MessageBubbleProps {
   message: ChatMessage;
@@ -27,6 +27,21 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         return { label: 'Wattmonk/Solar', icon: Sun, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' };
       default:
         return { label: 'General', icon: BookOpen, color: 'text-blue-400 bg-blue-500/10 border-blue-500/20' };
+    }
+  };
+
+  const getGroundingBadge = (status?: string) => {
+    switch (status) {
+      case 'grounded':
+        return { label: 'Document-Grounded', icon: ShieldCheck, color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' };
+      case 'partially_grounded':
+        return { label: 'Partially Grounded', icon: Info, color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' };
+      case 'not_grounded':
+        return { label: 'General Fallback (Ungrounded)', icon: AlertCircle, color: 'text-slate-400 bg-slate-800 border-slate-700' };
+      case 'declined':
+        return { label: 'Declined (Document-Only)', icon: AlertCircle, color: 'text-rose-400 bg-rose-500/10 border-rose-500/20' };
+      default:
+        return null;
     }
   };
 
@@ -84,14 +99,14 @@ export function MessageBubble({ message }: MessageBubbleProps) {
 
       {/* Bubble Content */}
       <div className={`space-y-2 max-w-2xl min-w-0 ${isUser ? 'items-end' : 'items-start'}`}>
-        {/* Scopes Header if present */}
-        {message.contextScopeIds && message.contextScopeIds.length > 0 && (
-          <div
-            className={`flex flex-wrap items-center gap-1.5 ${
-              isUser ? 'justify-end' : 'justify-start'
-            }`}
-          >
-            {message.contextScopeIds.map((scopeId) => {
+        {/* Scopes & Grounding Header */}
+        <div
+          className={`flex flex-wrap items-center gap-1.5 ${
+            isUser ? 'justify-end' : 'justify-start'
+          }`}
+        >
+          {message.contextScopeIds &&
+            message.contextScopeIds.map((scopeId) => {
               const badge = getScopeBadge(scopeId);
               const Icon = badge.icon;
               return (
@@ -104,8 +119,23 @@ export function MessageBubble({ message }: MessageBubbleProps) {
                 </span>
               );
             })}
-          </div>
-        )}
+
+          {!isUser && message.role === 'assistant' && message.groundingStatus && (() => {
+            const badge = getGroundingBadge(message.groundingStatus);
+            if (!badge) return null;
+            const Icon = badge.icon;
+            return (
+              <span
+                key="grounding-status"
+                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium border ${badge.color}`}
+                title={`Grounding Status: ${badge.label}`}
+              >
+                <Icon className="w-2.5 h-2.5" />
+                <span>{badge.label}</span>
+              </span>
+            );
+          })()}
+        </div>
 
         {/* Message Card */}
         <div
@@ -129,20 +159,15 @@ export function MessageBubble({ message }: MessageBubbleProps) {
           )}
         </div>
 
-        {/* Retrieved Citations Section */}
-        {message.role === 'assistant' && message.citations && message.citations.length > 0 && (
-          <div className="p-3 rounded-xl bg-slate-900/80 border border-slate-800/90 space-y-2.5 mt-2">
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-              <Quote className="w-3.5 h-3.5 text-indigo-400" />
-              <span>Retrieved Reference Citations ({message.citations.length})</span>
-            </div>
-            <div className="space-y-2">
-              {message.citations.map((citation, idx) => (
-                <CitationCard key={idx} citation={citation} index={idx} />
-              ))}
-            </div>
-          </div>
-        )}
+        {/* Expandable Source Citations Panel */}
+        {message.role === 'assistant' &&
+          ((message.citations && message.citations.length > 0) ||
+            (message.references && message.references.length > 0)) && (
+            <SourcePanel
+              messageId={message.id}
+              sources={message.citations || message.references}
+            />
+          )}
 
         {/* Footer Meta (Timestamp + Copy) */}
         <div

@@ -19,7 +19,10 @@ import type {
   ChatResponsePayload,
   ChatSession,
   ContextType,
+  GroundingStatus,
   ProviderId,
+  SourceReference,
+  TokenUsage,
   UserChatMessage,
   AssistantChatMessage,
 } from '../../lib/types.ts';
@@ -35,11 +38,16 @@ import {
 } from '../providers/index.ts';
 import type { ILlmProviderAdapter, ProviderMessage } from '../providers/types.ts';
 import type { ChatStreamEvent } from '../../lib/stream-protocol.ts';
+import {
+  RagPipeline,
+  ragPipeline,
+} from '../rag/rag-pipeline.ts';
+import { documentService } from './document-service.ts';
 
 export const DEFAULT_MAX_HISTORY_MESSAGES = 10;
 
 export const DEFAULT_ALLOWED_MODELS: Record<ProviderId, string[]> = {
-  gemini: ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+  gemini: ['gemini-3.5-flash', 'gemini-3.8-flash', 'gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
   openrouter: [
     'meta-llama/llama-3.3-70b-instruct',
     'meta-llama/llama-3.1-8b-instruct',
@@ -58,36 +66,11 @@ export const DEFAULT_ALLOWED_MODELS: Record<ProviderId, string[]> = {
   ollama: ['llama3', 'mistral'],
 };
 
-/**
- * Builds server-controlled domain system instructions based on the active context partition(s).
- * Clients are strictly prevented from overriding this prompt.
- */
-export function buildSystemInstruction(contexts: ContextType[]): string {
-  const instructions: string[] = [];
-
-  if (contexts.includes('NEC')) {
-    instructions.push(
-      'You are a specialized National Electrical Code (NEC) technical advisor. Provide accurate, code-compliant electrical engineering guidance adhering strictly to NFPA 70 / NEC standards (including Articles 690, 705, and 220). Emphasize electrical safety, equipment ratings, conductor sizing, and rapid shutdown compliance.'
-    );
-  }
-
-  if (contexts.includes('WATTMONK')) {
-    instructions.push(
-      'You are an expert Solar PV engineering and plan-set specialist for Wattmonk. Provide accurate technical guidance on residential and commercial PV system layout, AHJ permitting, utility interconnection, equipment specification, and plan-set drafting checklists.'
-    );
-  }
-
-  if (contexts.includes('GENERAL') || instructions.length === 0) {
-    instructions.push(
-      'You are an engineering AI assistant specializing in electrical, solar PV, and technical design. Provide clear, rigorous, and professional engineering insights.'
-    );
-  }
-
-  return instructions.join('\n\n');
-}
+export { buildSystemInstruction } from '../rag/rag-pipeline.ts';
 
 export interface ChatServiceConfig {
   registry?: ProviderRegistry;
+  pipeline?: RagPipeline;
   maxHistoryMessages?: number;
   allowedModels?: Partial<Record<ProviderId, string[]>>;
   defaultProviderId?: ProviderId;
@@ -96,12 +79,24 @@ export interface ChatServiceConfig {
 export class ChatService {
   private sessions: Map<string, ChatSession> = new Map();
   private registry: ProviderRegistry;
+  private pipeline: RagPipeline;
   private maxHistoryMessages: number;
   private allowedModels: Record<ProviderId, string[]>;
   private defaultProviderId?: ProviderId;
 
   constructor(config?: ChatServiceConfig) {
     this.registry = config?.registry || providerRegistry;
+    this.defaultProviderId =
+      config?.defaultProviderId ||
+      ((process.env.DEFAULT_LLM_PROVIDER as ProviderId) || 'gemini');
+
+    this.pipeline =
+      config?.pipeline ||
+      new RagPipeline({
+        registry: this.registry,
+        defaultProviderId: this.defaultProviderId,
+      });
+
     this.maxHistoryMessages =
       config?.maxHistoryMessages ??
       (process.env.CHAT_MAX_HISTORY_MESSAGES
@@ -129,11 +124,11 @@ export class ChatService {
       ...(config?.allowedModels || {}),
     };
 
-    this.defaultProviderId =
-      config?.defaultProviderId ||
-      ((process.env.DEFAULT_LLM_PROVIDER as ProviderId) || 'gemini');
-
     this.seedInitialSession();
+  }
+
+  getPipeline(): RagPipeline {
+    return this.pipeline;
   }
 
   private seedInitialSession(): void {
@@ -222,6 +217,27 @@ export class ChatService {
         });
       }
       resolvedContexts = contextValidation.value;
+    } else if (request.activeContextScopeIds && request.activeContextScopeIds.length > 0) {
+      const scopeToContextMap: Record<string, ContextType> = {
+        scope_nec: 'NEC',
+        scope_solar: 'WATTMONK',
+        scope_general: 'GENERAL',
+      };
+      const mapped = new Set<ContextType>();
+      for (const id of request.activeContextScopeIds) {
+        if (scopeToContextMap[id]) {
+          mapped.add(scopeToContextMap[id]);
+        } else if (id.toLowerCase().includes('nec')) {
+          mapped.add('NEC');
+        } else if (id.toLowerCase().includes('solar') || id.toLowerCase().includes('wattmonk')) {
+          mapped.add('WATTMONK');
+        } else {
+          mapped.add('GENERAL');
+        }
+      }
+      if (mapped.size > 0) {
+        resolvedContexts = Array.from(mapped);
+      }
     }
 
     return {
@@ -281,7 +297,7 @@ export class ChatService {
    */
   private buildHistoryWindow(
     session: ChatSession,
-    newUserMessage: string
+    newUserMessage?: string
   ): ProviderMessage[] {
     const historicalMessages = session.messages || [];
 
@@ -298,11 +314,13 @@ export class ChatService {
       }
     }
 
-    // Append the current user message
-    normalized.push({
-      role: 'user',
-      content: newUserMessage,
-    });
+    // Append user message if provided
+    if (newUserMessage) {
+      normalized.push({
+        role: 'user',
+        content: newUserMessage,
+      });
+    }
 
     return normalized;
   }
@@ -313,6 +331,19 @@ export class ChatService {
   async processMessage(request: ChatRequest): Promise<ChatResponsePayload> {
     // 1. Validate incoming message and context
     const { message, contexts } = this.validateInputs(request);
+
+    // If a specific document is targeted, ensure its context is included in contexts
+    if (request.documentId && request.documentId.trim()) {
+      try {
+        const targetDoc = await documentService.getDocument(request.documentId.trim());
+        const docContext = (targetDoc?.metadata?.contextType || targetDoc?.metadata?.context) as ContextType | undefined;
+        if (docContext && !contexts.includes(docContext)) {
+          contexts.push(docContext);
+        }
+      } catch {
+        // Continue if document lookup fails
+      }
+    }
 
     // 2. Validate selected provider and model against server configuration
     const { provider, model } = this.resolveProviderAndModel(
@@ -337,24 +368,31 @@ export class ChatService {
 
     session.activeContexts = contexts;
 
-    // 4. Build trusted system instruction and bounded message history
-    const systemPrompt = buildSystemInstruction(contexts);
-    const messages = this.buildHistoryWindow(session, message);
+    // 4. Build bounded prior history window (excluding current user message, which pipeline appends)
+    const historyMessages = this.buildHistoryWindow(session);
 
-    // 5. Call selected provider (does not fabricate an answer on failure)
-    let result;
+    // 5. Execute RAG pipeline (validates, retrieves untrusted evidence, constructs bounded prompt, calls provider)
+    let ragResult;
     try {
-      result = await provider.generateText({
-        messages,
-        options: {
-          model,
-          systemPrompt,
-        },
+      ragResult = await this.pipeline.execute({
+        message,
+        contexts,
+        autoDetectContext: request.autoDetectContext,
+        documentOnly: request.documentOnly,
+        topK: request.topK,
+        minScoreThreshold: request.minScoreThreshold,
+        documentId: request.documentId,
+        provider,
+        model,
+        historyMessages,
       });
-    } catch (providerError) {
-      // Re-throw provider error upstream without fabricating responses or saving broken state
-      throw providerError;
+    } catch (pipelineError) {
+      // Re-throw provider / pipeline error upstream without fabricating responses or saving broken state
+      throw pipelineError;
     }
+
+    const effectiveContexts = ragResult.context;
+    session.activeContexts = effectiveContexts;
 
     // 6. Construct typed user and assistant messages
     const userMessage: UserChatMessage = {
@@ -362,21 +400,23 @@ export class ChatService {
       role: 'user',
       content: message,
       timestamp: new Date().toISOString(),
-      contexts,
+      contexts: effectiveContexts,
       contextScopeIds: request.activeContextScopeIds,
     };
 
     const assistantMessage: AssistantChatMessage = {
       id: `msg_a_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       role: 'assistant',
-      content: result.content,
+      content: ragResult.answer,
       timestamp: new Date().toISOString(),
-      contexts,
+      contexts: effectiveContexts,
       contextScopeIds: request.activeContextScopeIds,
-      providerId: result.providerId,
-      usage: result.usage,
-      references: [],
-      citations: [],
+      providerId: ragResult.providerId,
+      usage: ragResult.usage,
+      groundingStatus: ragResult.groundingStatus,
+      detectedContexts: ragResult.detectedContexts,
+      references: ragResult.references,
+      citations: ragResult.citations,
     };
 
     // 7. Persist messages to session
@@ -388,7 +428,10 @@ export class ChatService {
       sessionId: session.id,
       userMessage,
       assistantMessage,
-      references: [],
+      references: ragResult.references,
+      citations: ragResult.citations,
+      groundingStatus: ragResult.groundingStatus,
+      detectedContexts: ragResult.detectedContexts,
       session,
     };
   }
@@ -403,6 +446,19 @@ export class ChatService {
   ): AsyncIterable<ChatStreamEvent> {
     // 1. Validate incoming message and context
     const { message, contexts } = this.validateInputs(request);
+
+    // If a specific document is targeted, ensure its context is included in contexts
+    if (request.documentId && request.documentId.trim()) {
+      try {
+        const targetDoc = await documentService.getDocument(request.documentId.trim());
+        const docContext = (targetDoc?.metadata?.contextType || targetDoc?.metadata?.context) as ContextType | undefined;
+        if (docContext && !contexts.includes(docContext)) {
+          contexts.push(docContext);
+        }
+      } catch {
+        // Continue if document lookup fails
+      }
+    }
 
     // 2. Validate selected provider and model against server configuration
     const { provider, model } = this.resolveProviderAndModel(
@@ -459,42 +515,60 @@ export class ChatService {
       },
     };
 
-    // 5. Build trusted system instruction and bounded message history
-    const systemPrompt = buildSystemInstruction(contexts);
-    const messages = this.buildHistoryWindow(session, message);
-
-    let accumulatedText = '';
-    let finalUsage = undefined;
+    // 5. Build bounded prior history window
+    const priorHistory = session.messages
+      .slice(0, -1)
+      .slice(-this.maxHistoryMessages)
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
 
     try {
-      const stream = provider.streamText({
-        messages,
-        options: {
-          model,
-          systemPrompt,
-          abortSignal: options?.signal,
-        },
+      const stream = this.pipeline.executeStream({
+        message,
+        contexts,
+        autoDetectContext: request.autoDetectContext,
+        documentOnly: request.documentOnly,
+        topK: request.topK,
+        minScoreThreshold: request.minScoreThreshold,
+        documentId: request.documentId,
+        provider,
+        model,
+        historyMessages: priorHistory,
+        signal: options?.signal,
       });
+
+      let finalAnswer = '';
+      let finalCitations: SourceReference[] = [];
+      let finalReferences: SourceReference[] = [];
+      let finalGroundingStatus: GroundingStatus = 'not_grounded';
+      let finalUsage: TokenUsage | undefined;
+      let effectiveContexts = contexts;
+      let detectedContexts: ContextType[] | undefined;
 
       for await (const chunk of stream) {
         if (options?.signal?.aborted) {
           return;
         }
 
-        if (chunk.usage) {
+        if (chunk.type === 'chunk') {
+          if (chunk.text && chunk.text.length > 0) {
+            yield {
+              type: 'delta',
+              data: {
+                text: chunk.text,
+                providerId: chunk.providerId,
+                model: chunk.model,
+              },
+            };
+          }
+        } else if (chunk.type === 'done') {
+          finalAnswer = chunk.answer;
+          finalCitations = chunk.citations;
+          finalReferences = chunk.references;
+          finalGroundingStatus = chunk.groundingStatus;
           finalUsage = chunk.usage;
-        }
-
-        if (chunk.text && chunk.text.length > 0) {
-          accumulatedText += chunk.text;
-          yield {
-            type: 'delta',
-            data: {
-              text: chunk.text,
-              providerId: chunk.providerId,
-              model: chunk.model,
-            },
-          };
+          effectiveContexts = chunk.context;
+          detectedContexts = chunk.detectedContexts;
         }
       }
 
@@ -502,18 +576,24 @@ export class ChatService {
         return;
       }
 
+      // Update contexts on user message and session
+      userMessage.contexts = effectiveContexts;
+      session.activeContexts = effectiveContexts;
+
       // 6. Finalize assistant message and persist to session
       const assistantMessage: AssistantChatMessage = {
         id: `msg_a_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
         role: 'assistant',
-        content: accumulatedText,
+        content: finalAnswer,
         timestamp: new Date().toISOString(),
-        contexts,
+        contexts: effectiveContexts,
         contextScopeIds: request.activeContextScopeIds,
         providerId: provider.id,
         usage: finalUsage,
-        references: [],
-        citations: [],
+        groundingStatus: finalGroundingStatus,
+        detectedContexts,
+        references: finalReferences,
+        citations: finalCitations,
       };
 
       session.messages.push(assistantMessage);
@@ -525,6 +605,9 @@ export class ChatService {
           sessionId: session.id,
           assistantMessage,
           session,
+          groundingStatus: finalGroundingStatus,
+          references: finalReferences,
+          citations: finalCitations,
         },
       };
     } catch (providerError) {
@@ -534,4 +617,11 @@ export class ChatService {
   }
 }
 
-export const chatService = new ChatService();
+const globalForChatService = globalThis as unknown as {
+  chatService?: ChatService;
+};
+
+export const chatService =
+  globalForChatService.chatService ?? new ChatService();
+
+globalForChatService.chatService = chatService;

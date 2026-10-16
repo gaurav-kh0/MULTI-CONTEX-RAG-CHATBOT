@@ -345,11 +345,28 @@ export class GeminiEmbeddingProvider implements IEmbeddingProvider {
       const contentsPayload = texts.length === 1 ? texts[0] : texts;
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const response: any = await this.sdkClient.models.embedContent({
-        model: this.modelId,
-        contents: contentsPayload,
-        config: configObj,
-      });
+      let response: any;
+      try {
+        response = await this.sdkClient.models.embedContent({
+          model: this.modelId,
+          contents: contentsPayload,
+          config: configObj,
+        });
+      } catch (embedErr: unknown) {
+        const errMsg = embedErr instanceof Error ? embedErr.message : String(embedErr);
+        if (
+          (errMsg.includes('404') || errMsg.toLowerCase().includes('not found')) &&
+          this.modelId !== 'gemini-embedding-001'
+        ) {
+          response = await this.sdkClient.models.embedContent({
+            model: 'gemini-embedding-001',
+            contents: contentsPayload,
+            config: configObj,
+          });
+        } else {
+          throw embedErr;
+        }
+      }
 
       // Extract raw vectors from response
       const rawVectors = this.extractVectors(response, texts.length);
