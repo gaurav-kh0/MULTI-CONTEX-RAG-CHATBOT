@@ -45,9 +45,7 @@ import type {
 } from '../../lib/types.ts';
 import {
   defaultEmbeddingProvider,
-  GeminiEmbeddingProvider,
   EmbeddingError,
-  EMBEDDING_DIMENSIONS,
 } from './embeddings.ts';
 import {
   getActiveVectorStore,

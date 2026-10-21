@@ -33,7 +33,6 @@
  */
 
 import type {
-  ChatMessage,
   ChatResponsePayload,
   ChatSession,
   ProviderId,

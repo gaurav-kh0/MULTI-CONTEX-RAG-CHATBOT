@@ -1,16 +1,25 @@
 'use client';
 
 import React from 'react';
-import { Menu, Plus, PanelLeftOpen, Layers, UploadCloud, Search } from 'lucide-react';
+import { Menu, Plus, PanelLeftOpen, Layers, UploadCloud, Search, RotateCcw } from 'lucide-react';
+import { ProviderModelSelector } from '@/components/model/ProviderModelSelector';
+import type { ProviderId, ProviderInfo } from '@/lib/types';
 
 interface AppHeaderProps {
   onOpenMobileNav: () => void;
   onToggleDesktopSidebar: () => void;
   isSidebarCollapsed: boolean;
   onNewChat: () => void;
+  onClearChat?: () => void;
+  hasMessages?: boolean;
   onOpenUploadModal?: () => void;
   onOpenSearchModal?: () => void;
   activeContextCount: number;
+  providers?: ProviderInfo[];
+  selectedProviderId?: ProviderId;
+  selectedModel?: string;
+  onSelectProvider?: (providerId: ProviderId, model?: string) => void;
+  onSelectModel?: (model: string) => void;
 }
 
 export function AppHeader({
@@ -18,9 +27,16 @@ export function AppHeader({
   onToggleDesktopSidebar,
   isSidebarCollapsed,
   onNewChat,
+  onClearChat,
+  hasMessages = false,
   onOpenUploadModal,
   onOpenSearchModal,
   activeContextCount,
+  providers,
+  selectedProviderId,
+  selectedModel,
+  onSelectProvider,
+  onSelectModel,
 }: AppHeaderProps) {
   return (
     <header className="h-14 border-b border-slate-800 bg-slate-900/60 backdrop-blur px-4 flex items-center justify-between sticky top-0 z-20">
@@ -63,8 +79,18 @@ export function AppHeader({
         </div>
       </div>
 
-      <div className="flex items-center gap-2.5">
-        <div className="hidden sm:flex items-center gap-1.5 text-[11px] text-slate-300 bg-slate-800/60 border border-slate-700/60 px-2.5 py-1 rounded-lg">
+      <div className="flex items-center gap-2 sm:gap-2.5">
+        {providers && providers.length > 0 && selectedProviderId && selectedModel && onSelectProvider && onSelectModel && (
+          <ProviderModelSelector
+            providers={providers}
+            selectedProviderId={selectedProviderId}
+            selectedModel={selectedModel}
+            onSelectProvider={onSelectProvider}
+            onSelectModel={onSelectModel}
+          />
+        )}
+
+        <div className="hidden lg:flex items-center gap-1.5 text-[11px] text-slate-300 bg-slate-800/60 border border-slate-700/60 px-2.5 py-1 rounded-lg">
           <span className="text-slate-500">Contexts:</span>
           <span className="font-semibold text-indigo-400">{activeContextCount} active</span>
         </div>
@@ -90,6 +116,19 @@ export function AppHeader({
           >
             <Search className="w-3.5 h-3.5 text-indigo-400" />
             <span className="hidden sm:inline">Search Docs</span>
+          </button>
+        )}
+
+        {hasMessages && onClearChat && (
+          <button
+            type="button"
+            onClick={onClearChat}
+            aria-label="Clear current chat"
+            className="flex items-center gap-1.5 py-1.5 px-3 rounded-lg bg-slate-800 hover:bg-rose-950/40 text-slate-300 hover:text-rose-400 text-xs font-medium border border-slate-700/80 hover:border-rose-500/30 transition-colors shadow-xs"
+            title="Clear current messages"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Clear Chat</span>
           </button>
         )}
 

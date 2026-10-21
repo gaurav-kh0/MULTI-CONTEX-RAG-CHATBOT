@@ -14,7 +14,6 @@
  */
 
 import type {
-  ChatMessage,
   ChatRequest,
   ChatResponsePayload,
   ChatSession,
@@ -40,7 +39,6 @@ import type { ILlmProviderAdapter, ProviderMessage } from '../providers/types.ts
 import type { ChatStreamEvent } from '../../lib/stream-protocol.ts';
 import {
   RagPipeline,
-  ragPipeline,
 } from '../rag/rag-pipeline.ts';
 import { documentService } from './document-service.ts';
 
@@ -123,43 +121,10 @@ export class ChatService {
       ollama: [...DEFAULT_ALLOWED_MODELS.ollama],
       ...(config?.allowedModels || {}),
     };
-
-    this.seedInitialSession();
   }
 
   getPipeline(): RagPipeline {
     return this.pipeline;
-  }
-
-  private seedInitialSession(): void {
-    const demoSessionId = 'session_initial_workspace';
-    this.sessions.set(demoSessionId, {
-      id: demoSessionId,
-      title: 'Initial Workspace Chat',
-      activeContextScopeIds: ['scope_nec', 'scope_solar'],
-      activeContexts: ['NEC', 'WATTMONK'],
-      messages: [
-        {
-          id: 'msg_welcome_user',
-          role: 'user',
-          content: 'Hello, what contexts are available in this assistant?',
-          timestamp: new Date(Date.now() - 300000).toISOString(),
-          contexts: ['NEC', 'WATTMONK'],
-        },
-        {
-          id: 'msg_welcome_assistant',
-          role: 'assistant',
-          content:
-            'Welcome! Available partitioned contexts are NEC (National Electrical Code), Wattmonk / Solar PV, and General Engineering.\n\nYou can select contexts using the selector above and submit queries.',
-          timestamp: new Date(Date.now() - 290000).toISOString(),
-          contexts: ['NEC', 'WATTMONK'],
-          references: [],
-          citations: [],
-        },
-      ],
-      createdAt: new Date(Date.now() - 300000).toISOString(),
-      updatedAt: new Date(Date.now() - 290000).toISOString(),
-    });
   }
 
   async listSessions(): Promise<ChatSession[]> {
@@ -188,6 +153,14 @@ export class ChatService {
 
   async deleteSession(id: string): Promise<boolean> {
     return this.sessions.delete(id);
+  }
+
+  async clearSession(id: string): Promise<ChatSession | null> {
+    const session = this.sessions.get(id);
+    if (!session) return null;
+    session.messages = [];
+    session.updatedAt = new Date().toISOString();
+    return session;
   }
 
   /**
@@ -547,6 +520,10 @@ export class ChatService {
 
       for await (const chunk of stream) {
         if (options?.signal?.aborted) {
+          const lastIdx = session.messages.lastIndexOf(userMessage);
+          if (lastIdx !== -1 && lastIdx === session.messages.length - 1) {
+            session.messages.splice(lastIdx, 1);
+          }
           return;
         }
 
@@ -573,6 +550,10 @@ export class ChatService {
       }
 
       if (options?.signal?.aborted) {
+        const lastIdx = session.messages.lastIndexOf(userMessage);
+        if (lastIdx !== -1 && lastIdx === session.messages.length - 1) {
+          session.messages.splice(lastIdx, 1);
+        }
         return;
       }
 
@@ -612,6 +593,10 @@ export class ChatService {
       };
     } catch (providerError) {
       // Re-throw provider failure upstream without fabricating answers or saving corrupted assistant state
+      const lastIdx = session.messages.lastIndexOf(userMessage);
+      if (lastIdx !== -1 && lastIdx === session.messages.length - 1) {
+        session.messages.splice(lastIdx, 1);
+      }
       throw providerError;
     }
   }

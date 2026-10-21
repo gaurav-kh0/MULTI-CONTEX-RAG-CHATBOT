@@ -28,7 +28,6 @@ import type {
 } from '../../lib/types.ts';
 import {
   validateUserMessage,
-  validateContextTypes,
 } from '../../lib/validation.ts';
 import {
   RagRetriever,
@@ -44,7 +43,6 @@ import {
 import type {
   ILlmProviderAdapter,
   ProviderMessage,
-  ProviderStreamChunk,
 } from '../providers/types.ts';
 
 import {
@@ -477,7 +475,6 @@ export class RagPipeline {
       cleanMessage,
       resolvedContexts,
       detectedContexts,
-      retrievalResults,
       citations,
       groundingStatus,
       systemPrompt,

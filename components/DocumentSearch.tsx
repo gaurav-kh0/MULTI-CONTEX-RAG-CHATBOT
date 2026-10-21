@@ -41,7 +41,6 @@ import {
   BookOpen,
   Sparkles,
   RefreshCw,
-  ExternalLink,
   MessageSquare,
 } from 'lucide-react';
 

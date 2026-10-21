@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { ChatMessage } from '@/lib/types';
 import { SourcePanel } from '@/components/SourcePanel';
-import { User, Bot, Copy, Check, Quote, Zap, Sun, BookOpen, ShieldCheck, AlertCircle, Info } from 'lucide-react';
+import { User, Bot, Copy, Check, Zap, Sun, BookOpen, ShieldCheck, AlertCircle, Info } from 'lucide-react';
 
 interface MessageBubbleProps {
   message: ChatMessage;

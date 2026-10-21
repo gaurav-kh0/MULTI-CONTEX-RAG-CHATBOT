@@ -1,4 +1,4 @@
-import test, { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -26,7 +26,6 @@ import type {
   IVectorStore,
   RagQueryOptions,
   RagRetrievalResult,
-  SourceReference,
 } from '../lib/types.ts';
 
 // ---------------------------------------------------------------------------

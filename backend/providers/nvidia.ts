@@ -286,6 +286,10 @@ export class NvidiaProvider implements ILlmProviderAdapter {
 
     try {
       for await (const chunk of parseOpenAiSseStream(response)) {
+        if (request.options?.abortSignal?.aborted) {
+          return;
+        }
+
         if (chunk.json.usage) {
           aggregatedUsage = {
             promptTokens: chunk.json.usage.prompt_tokens ?? 0,

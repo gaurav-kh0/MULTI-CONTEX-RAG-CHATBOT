@@ -1,11 +1,9 @@
-import test, { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
   RagRetriever,
   RetrieverError,
-  DEFAULT_RETRIEVAL_TOP_K,
-  DEFAULT_MIN_SCORE_THRESHOLD,
 } from '../backend/rag/retriever.ts';
 import {
   EmbeddingError,

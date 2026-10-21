@@ -13,7 +13,6 @@
  */
 
 import type {
-  ChatStreamEvent,
   ChatStreamEventType,
   ChatStreamSessionData,
   ChatStreamDeltaData,

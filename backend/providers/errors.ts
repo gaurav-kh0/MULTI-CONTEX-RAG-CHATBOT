@@ -8,7 +8,7 @@
  * status codes and diagnostic codes without silent fallbacks.
  */
 
-import type { ProviderId } from '../../lib/types.ts';
+import type { ProviderId, ApiErrorCode } from '../../lib/types.ts';
 
 export type ProviderErrorCode =
   | 'CONFIGURATION_ERROR'   // Missing API key, empty endpoint, invalid provider config
@@ -97,4 +97,28 @@ export function sanitizeErrorMessage(message: string, secrets: (string | undefin
   // Redact any Bearer tokens
   sanitized = sanitized.replace(/Bearer\s+[A-Za-z0-9_\-\.]{8,}/gi, 'Bearer [REDACTED_KEY]');
   return sanitized;
+}
+
+/**
+ * Maps a ProviderError to appropriate HTTP status and standard API error code.
+ */
+export function mapProviderErrorToHttpStatus(err: ProviderError): { status: number; apiCode: ApiErrorCode } {
+  switch (err.code) {
+    case 'INVALID_REQUEST':
+      return { status: 400, apiCode: 'BAD_REQUEST' };
+    case 'MODEL_NOT_FOUND':
+      return { status: 400, apiCode: 'NOT_FOUND' };
+    case 'RATE_LIMIT_ERROR':
+      return { status: 429, apiCode: 'SERVICE_UNAVAILABLE' };
+    case 'CONFIGURATION_ERROR':
+      return { status: 503, apiCode: 'SERVICE_UNAVAILABLE' };
+    case 'AUTHENTICATION_ERROR':
+    case 'PERMISSION_DENIED':
+    case 'PROVIDER_DOWN':
+      return { status: 502, apiCode: 'SERVICE_UNAVAILABLE' };
+    case 'NETWORK_ERROR':
+      return { status: 504, apiCode: 'SERVICE_UNAVAILABLE' };
+    default:
+      return { status: err.statusCode || 500, apiCode: 'INTERNAL_ERROR' };
+  }
 }

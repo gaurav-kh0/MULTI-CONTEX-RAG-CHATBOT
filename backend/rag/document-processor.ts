@@ -198,7 +198,7 @@ export class DocumentProcessor {
    * Enforces configurable file size limits.
    */
   validateSize(sizeBytes: number): void {
-    if (sizeBytes <= 0) {
+    if (sizeBytes < this.minSizeBytes) {
       throw new DocumentProcessorError(
         'FILE_EMPTY',
         'Uploaded file is empty (0 bytes).'

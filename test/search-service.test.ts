@@ -1,16 +1,12 @@
-import test, { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
   SearchService,
   SearchError,
-  DEFAULT_SEARCH_LIMIT,
-  MAX_SEARCH_LIMIT,
-  MIN_SEARCH_LIMIT,
 } from '../backend/services/search-service.ts';
 import {
   RagRetriever,
-  RetrieverError,
 } from '../backend/rag/retriever.ts';
 import {
   EmbeddingError,

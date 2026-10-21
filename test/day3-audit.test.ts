@@ -18,7 +18,7 @@
  * 14. Verification safeguards: Real vs Mocked status reporting.
  */
 
-import test, { describe, it, before, after, beforeEach } from 'node:test';
+import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -27,14 +27,9 @@ import os from 'node:os';
 import {
   DocumentProcessor,
   DocumentProcessorError,
-  normalizeWhitespace,
 } from '../backend/rag/document-processor.ts';
 import {
   TextChunker,
-  textChunker,
-  normalizeChunkWhitespace,
-  DEFAULT_CHUNK_SIZE,
-  DEFAULT_CHUNK_OVERLAP,
 } from '../backend/rag/chunker.ts';
 import {
   GeminiEmbeddingProvider,
@@ -48,13 +43,11 @@ import {
 } from '../backend/storage/pinecone.ts';
 import {
   InMemoryVectorStore,
-  getActiveVectorStore,
 } from '../backend/storage/index.ts';
 import {
   DocumentService,
 } from '../backend/services/document-service.ts';
 import type {
-  ContextType,
   DocumentChunk,
   IEmbeddingProvider,
   IVectorStore,

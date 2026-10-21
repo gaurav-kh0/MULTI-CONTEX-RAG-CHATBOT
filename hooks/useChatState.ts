@@ -1,7 +1,16 @@
 'use client';
 
 import { useReducer, useEffect, useCallback, useRef } from 'react';
-import type { ChatMessage, ChatSession, ContextScope, ContextType, ContextDocument } from '../lib/types.ts';
+import type {
+  ChatMessage,
+  ChatSession,
+  ContextScope,
+  ContextType,
+  ContextDocument,
+  ProviderId,
+  ProviderInfo,
+  ProvidersResponsePayload,
+} from '../lib/types.ts';
 import { INITIAL_CONTEXT_SCOPES } from '../lib/constants.ts';
 import { chatClient } from '../lib/chat-client.ts';
 
@@ -18,6 +27,9 @@ export interface ChatState {
   documents: ContextDocument[];
   selectedDocumentId?: string;
   documentOnly: boolean;
+  providers: ProviderInfo[];
+  selectedProviderId: ProviderId;
+  selectedModel: string;
   input: string;
   isLoading: boolean;
   error: string | null;
@@ -63,9 +75,13 @@ export type ChatAction =
   | { type: 'SET_DOCUMENTS'; payload: ContextDocument[] }
   | { type: 'SET_SELECTED_DOCUMENT'; payload: string | undefined }
   | { type: 'SET_DOCUMENT_ONLY'; payload: boolean }
+  | { type: 'SET_PROVIDERS'; payload: ProvidersResponsePayload }
+  | { type: 'SET_PROVIDER'; payload: { providerId: ProviderId; model?: string } }
+  | { type: 'SET_MODEL'; payload: string }
   | { type: 'SET_SESSIONS'; payload: ChatSession[] }
   | { type: 'SELECT_SESSION'; payload: string }
   | { type: 'NEW_CHAT'; payload?: { sessionId?: string } }
+  | { type: 'CLEAR_CURRENT_CHAT' }
   | { type: 'DELETE_SESSION'; payload: string }
   | { type: 'CLEAR_ERROR' }
   | { type: 'TOGGLE_SIDEBAR' }
@@ -84,6 +100,9 @@ export const initialState: ChatState = {
   documents: [],
   selectedDocumentId: undefined,
   documentOnly: false,
+  providers: [],
+  selectedProviderId: 'gemini',
+  selectedModel: 'gemini-3.5-flash',
   input: '',
   isLoading: false,
   error: null,
@@ -97,19 +116,39 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'SET_INPUT':
       return { ...state, input: action.payload };
 
-    case 'SUBMIT_START':
+    case 'SUBMIT_START': {
+      const lastMsg = state.messages[state.messages.length - 1];
+      const isRetry =
+        lastMsg &&
+        lastMsg.role === 'user' &&
+        lastMsg.content === action.payload.rawText;
+
+      const newMessages = isRetry
+        ? [...state.messages, action.payload.assistantPlaceholder]
+        : [
+            ...state.messages,
+            action.payload.userMessage,
+            action.payload.assistantPlaceholder,
+          ];
+
+      const updatedSessions = state.activeSessionId
+        ? state.sessions.map((s) =>
+            s.id === state.activeSessionId
+              ? { ...s, messages: newMessages, updatedAt: new Date().toISOString() }
+              : s
+          )
+        : state.sessions;
+
       return {
         ...state,
-        messages: [
-          ...state.messages,
-          action.payload.userMessage,
-          action.payload.assistantPlaceholder,
-        ],
+        messages: newMessages,
+        sessions: updatedSessions,
         input: '',
         isLoading: true,
         error: null,
         lastFailedMessage: action.payload.rawText,
       };
+    }
 
     case 'STREAM_DELTA': {
       const updatedMessages = state.messages.map((m) =>
@@ -117,7 +156,14 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           ? { ...m, content: m.content + action.payload.text }
           : m
       );
-      return { ...state, messages: updatedMessages };
+      const updatedSessions = state.activeSessionId
+        ? state.sessions.map((s) =>
+            s.id === state.activeSessionId
+              ? { ...s, messages: updatedMessages }
+              : s
+          )
+        : state.sessions;
+      return { ...state, messages: updatedMessages, sessions: updatedSessions };
     }
 
     case 'STREAM_SUCCESS': {
@@ -129,11 +175,16 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
           ? action.payload.assistantMessage
           : m
       );
+      const syncedSession: ChatSession = {
+        ...action.payload.session,
+        messages: updatedMessages,
+        activeContextScopeIds: state.activeScopeIds,
+      };
       return {
         ...state,
         messages: updatedMessages,
-        sessions: [action.payload.session, ...updatedSessions],
-        activeSessionId: action.payload.session.id,
+        sessions: [syncedSession, ...updatedSessions],
+        activeSessionId: syncedSession.id,
         isLoading: false,
         error: null,
         lastFailedMessage: undefined,
@@ -144,9 +195,17 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       const updatedMessages = state.messages.filter(
         (m) => m.id !== action.payload.assistantMessageId || m.content.length > 0
       );
+      const updatedSessions = state.activeSessionId
+        ? state.sessions.map((s) =>
+            s.id === state.activeSessionId
+              ? { ...s, messages: updatedMessages }
+              : s
+          )
+        : state.sessions;
       return {
         ...state,
         messages: updatedMessages,
+        sessions: updatedSessions,
         isLoading: false,
         error: action.payload.error,
       };
@@ -158,9 +217,17 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         lastMsg && lastMsg.role === 'assistant' && !lastMsg.content.trim()
           ? state.messages.slice(0, -1)
           : state.messages;
+      const updatedSessions = state.activeSessionId
+        ? state.sessions.map((s) =>
+            s.id === state.activeSessionId
+              ? { ...s, messages: cleanedMessages }
+              : s
+          )
+        : state.sessions;
       return {
         ...state,
         messages: cleanedMessages,
+        sessions: updatedSessions,
         isLoading: false,
       };
     }
@@ -193,7 +260,14 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       const nextScopeIds = isAlreadyActive
         ? state.activeScopeIds.filter((id) => id !== scopeId)
         : [...state.activeScopeIds, scopeId];
-      return { ...state, activeScopeIds: nextScopeIds };
+      const updatedSessions = state.activeSessionId
+        ? state.sessions.map((s) =>
+            s.id === state.activeSessionId
+              ? { ...s, activeContextScopeIds: nextScopeIds }
+              : s
+          )
+        : state.sessions;
+      return { ...state, activeScopeIds: nextScopeIds, sessions: updatedSessions };
     }
 
     case 'SET_SCOPES': {
@@ -242,6 +316,33 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     case 'SET_DOCUMENT_ONLY':
       return { ...state, documentOnly: action.payload };
 
+    case 'SET_PROVIDERS': {
+      const payload = action.payload;
+      const defaultProv = payload.defaultProviderId || 'gemini';
+      const prov = payload.providers?.find((p) => p.id === defaultProv) || payload.providers?.[0];
+      const defaultModel = payload.defaultModel || prov?.defaultModel || 'gemini-3.5-flash';
+      return {
+        ...state,
+        providers: payload.providers || [],
+        selectedProviderId: defaultProv,
+        selectedModel: defaultModel,
+      };
+    }
+
+    case 'SET_PROVIDER': {
+      const { providerId, model } = action.payload;
+      const prov = state.providers.find((p) => p.id === providerId);
+      const targetModel = model || prov?.defaultModel || prov?.models?.[0] || state.selectedModel;
+      return {
+        ...state,
+        selectedProviderId: providerId,
+        selectedModel: targetModel,
+      };
+    }
+
+    case 'SET_MODEL':
+      return { ...state, selectedModel: action.payload };
+
     case 'SET_SESSIONS': {
       const sessions = action.payload;
       if (sessions.length > 0 && !state.activeSessionId) {
@@ -261,24 +362,56 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
     }
 
     case 'SELECT_SESSION': {
-      const session = state.sessions.find((s) => s.id === action.payload);
-      if (!session) return state;
+      // 1. Sync current active conversation messages and scopes to state.sessions before switching
+      const updatedSessions = state.activeSessionId
+        ? state.sessions.map((s) =>
+            s.id === state.activeSessionId
+              ? {
+                  ...s,
+                  messages: state.messages,
+                  activeContextScopeIds: state.activeScopeIds,
+                  updatedAt: new Date().toISOString(),
+                }
+              : s
+          )
+        : state.sessions;
+
+      const target = updatedSessions.find((s) => s.id === action.payload);
+      if (!target) return state;
+
       return {
         ...state,
-        activeSessionId: session.id,
-        messages: session.messages || [],
+        sessions: updatedSessions,
+        activeSessionId: target.id,
+        messages: target.messages || [],
         activeScopeIds:
-          session.activeContextScopeIds && session.activeContextScopeIds.length > 0
-            ? session.activeContextScopeIds
+          target.activeContextScopeIds && target.activeContextScopeIds.length > 0
+            ? target.activeContextScopeIds
             : state.activeScopeIds,
         error: null,
+        lastFailedMessage: undefined,
         isMobileNavOpen: false,
       };
     }
 
-    case 'NEW_CHAT':
+    case 'NEW_CHAT': {
+      // 1. Sync current active conversation to sessions before opening a clean new chat
+      const updatedSessions = state.activeSessionId
+        ? state.sessions.map((s) =>
+            s.id === state.activeSessionId
+              ? {
+                  ...s,
+                  messages: state.messages,
+                  activeContextScopeIds: state.activeScopeIds,
+                  updatedAt: new Date().toISOString(),
+                }
+              : s
+          )
+        : state.sessions;
+
       return {
         ...state,
+        sessions: updatedSessions,
         activeSessionId: action.payload?.sessionId || undefined,
         messages: [],
         input: '',
@@ -286,23 +419,57 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
         lastFailedMessage: undefined,
         isMobileNavOpen: false,
       };
+    }
+
+    case 'CLEAR_CURRENT_CHAT': {
+      const updatedSessions = state.activeSessionId
+        ? state.sessions.map((s) =>
+            s.id === state.activeSessionId
+              ? { ...s, messages: [], updatedAt: new Date().toISOString() }
+              : s
+          )
+        : state.sessions;
+
+      return {
+        ...state,
+        sessions: updatedSessions,
+        messages: [],
+        error: null,
+        lastFailedMessage: undefined,
+      };
+    }
 
     case 'DELETE_SESSION': {
       const remainingSessions = state.sessions.filter(
         (s) => s.id !== action.payload
       );
       const wasActive = state.activeSessionId === action.payload;
-      return {
-        ...state,
-        sessions: remainingSessions,
-        ...(wasActive
-          ? {
-              activeSessionId: undefined,
-              messages: [],
-              error: null,
-            }
-          : {}),
-      };
+      if (wasActive) {
+        if (remainingSessions.length > 0) {
+          const nextActive = remainingSessions[0];
+          return {
+            ...state,
+            sessions: remainingSessions,
+            activeSessionId: nextActive.id,
+            messages: nextActive.messages || [],
+            activeScopeIds:
+              nextActive.activeContextScopeIds && nextActive.activeContextScopeIds.length > 0
+                ? nextActive.activeContextScopeIds
+                : state.activeScopeIds,
+            error: null,
+            lastFailedMessage: undefined,
+          };
+        }
+        return {
+          ...state,
+          sessions: [],
+          activeSessionId: undefined,
+          messages: [],
+          error: null,
+          lastFailedMessage: undefined,
+        };
+      }
+      return { ...state, sessions: remainingSessions };
     }
 
     case 'CLEAR_ERROR':
@@ -334,10 +501,11 @@ export function useChatState() {
 
     async function initialize() {
       try {
-        const [loadedScopes, loadedSessions, loadedDocs] = await Promise.all([
+        const [loadedScopes, loadedSessions, loadedDocs, loadedProviders] = await Promise.all([
           chatClient.fetchContextScopes().catch(() => INITIAL_CONTEXT_SCOPES),
           chatClient.fetchSessions().catch(() => []),
           chatClient.fetchDocuments().catch(() => []),
+          chatClient.fetchProviders().catch(() => ({ defaultProviderId: 'gemini' as ProviderId, providers: [] })),
         ]);
 
         if (mounted) {
@@ -349,6 +517,9 @@ export function useChatState() {
           }
           if (loadedDocs.length > 0) {
             dispatch({ type: 'SET_DOCUMENTS', payload: loadedDocs });
+          }
+          if (loadedProviders && loadedProviders.providers && loadedProviders.providers.length > 0) {
+            dispatch({ type: 'SET_PROVIDERS', payload: loadedProviders });
           }
         }
       } catch (err) {
@@ -457,6 +628,8 @@ export function useChatState() {
             contexts: activeContexts.length > 0 ? activeContexts : undefined,
             documentId: state.selectedDocumentId && state.selectedDocumentId !== 'all' ? state.selectedDocumentId : undefined,
             documentOnly: state.documentOnly,
+            providerId: state.selectedProviderId,
+            model: state.selectedModel,
           },
           {
             onDelta: (data) => {
@@ -502,7 +675,8 @@ export function useChatState() {
         );
       } catch (err: unknown) {
         if (controller.signal.aborted) {
-          // Explicitly cancelled by user, state already cleaned up
+          // Explicitly cancelled by user, ensure UI is never left permanently loading
+          dispatch({ type: 'CANCEL_REQUEST' });
           return;
         }
         const errorMessage =
@@ -527,6 +701,8 @@ export function useChatState() {
       state.selectedDocumentId,
       state.documentOnly,
       state.documents,
+      state.selectedProviderId,
+      state.selectedModel,
     ]
   );
 
@@ -548,6 +724,16 @@ export function useChatState() {
       dispatch({ type: 'NEW_CHAT' });
     }
   }, []);
+
+  // Clear Current Conversation (resets messages of active session)
+  const clearCurrentChat = useCallback(async () => {
+    if (state.activeSessionId) {
+      chatClient.clearSession(state.activeSessionId).catch((err) => {
+        console.error('Failed to clear session on server:', err);
+      });
+    }
+    dispatch({ type: 'CLEAR_CURRENT_CHAT' });
+  }, [state.activeSessionId]);
 
   // Select a session
   const selectSession = useCallback((sessionId: string) => {
@@ -597,6 +783,15 @@ export function useChatState() {
     dispatch({ type: 'SET_MOBILE_NAV', payload: isOpen });
   }, []);
 
+  // Provider and Model callbacks
+  const setProvider = useCallback((providerId: ProviderId, model?: string) => {
+    dispatch({ type: 'SET_PROVIDER', payload: { providerId, model } });
+  }, []);
+
+  const setModel = useCallback((model: string) => {
+    dispatch({ type: 'SET_MODEL', payload: model });
+  }, []);
+
   // Document Management callbacks
   const refreshDocuments = useCallback(async () => {
     try {
@@ -624,12 +819,15 @@ export function useChatState() {
     retryLastMessage,
     cancelCurrentRequest,
     startNewChat,
+    clearCurrentChat,
     selectSession,
     deleteSession,
     toggleScope,
     selectSuggestedQuestion,
     toggleSidebar,
     setMobileNav,
+    setProvider,
+    setModel,
     refreshDocuments,
     setSelectedDocumentId,
     setDocumentOnly,

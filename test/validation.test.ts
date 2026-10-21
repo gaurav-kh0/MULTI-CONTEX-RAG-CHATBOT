@@ -1,4 +1,4 @@
-import test, { describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   validateUserMessage,
@@ -9,12 +9,10 @@ import {
   validateRequestSize,
   validateChatRequest,
   createApiSuccessResponse,
-  createApiErrorResponse,
 } from '../lib/validation.ts';
 import type {
   ApiResponse,
   ChatMessage,
-  ContextType,
   UserChatMessage,
   AssistantChatMessage,
   Expect,
@@ -31,7 +29,8 @@ describe('Compile-Time Type Assertions', () => {
     function checkNarrowing(res: TestSuccess) {
       if (res.success) {
         // Here res.data must be { id: string }
-        type IsDataPresent = Expect<Equal<typeof res.data, { id: string }>>;
+        const isDataPresent: Expect<Equal<typeof res.data, { id: string }>> = true;
+        assert.ok(isDataPresent);
         assert.ok(res.data);
       } else {
         // Here res.error must be present
@@ -53,7 +52,8 @@ describe('Compile-Time Type Assertions', () => {
     };
 
     if (userMsg.role === 'user') {
-      type IsUser = Expect<Equal<typeof userMsg, UserChatMessage>>;
+      const isUser: Expect<Equal<typeof userMsg, UserChatMessage>> = true;
+      assert.ok(isUser);
       assert.equal(userMsg.role, 'user');
     }
 
@@ -67,7 +67,8 @@ describe('Compile-Time Type Assertions', () => {
     };
 
     if (assistantMsg.role === 'assistant') {
-      type IsAssistant = Expect<Equal<typeof assistantMsg, AssistantChatMessage>>;
+      const isAssistant: Expect<Equal<typeof assistantMsg, AssistantChatMessage>> = true;
+      assert.ok(isAssistant);
       assert.equal(assistantMsg.role, 'assistant');
     }
   });

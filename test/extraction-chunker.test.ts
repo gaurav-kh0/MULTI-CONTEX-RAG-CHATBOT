@@ -1,4 +1,4 @@
-import test, { describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   DocumentProcessor,
@@ -8,7 +8,6 @@ import {
 import {
   TextChunker,
   textChunker,
-  normalizeChunkWhitespace,
 } from '../backend/rag/chunker.ts';
 import type { ExtractedPage } from '../backend/rag/document-processor.ts';
 

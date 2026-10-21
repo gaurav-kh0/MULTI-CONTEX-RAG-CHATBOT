@@ -12,7 +12,7 @@ import {
   createApiSuccessResponse,
   createApiErrorResponse,
 } from '@/lib/validation';
-import { ProviderError } from '@/backend/providers';
+import { ProviderError, mapProviderErrorToHttpStatus } from '@/backend/providers';
 import { formatSseEvent, type ChatStreamErrorData } from '@/lib/stream-protocol';
 
 export async function POST(request: Request): Promise<Response> {
@@ -91,41 +91,7 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json(createApiSuccessResponse(result), { status: 200 });
   } catch (err: unknown) {
     if (err instanceof ProviderError) {
-      let status = 500;
-      let apiCode: 'BAD_REQUEST' | 'NOT_FOUND' | 'SERVICE_UNAVAILABLE' | 'INTERNAL_ERROR' = 'INTERNAL_ERROR';
-
-      switch (err.code) {
-        case 'INVALID_REQUEST':
-          status = 400;
-          apiCode = 'BAD_REQUEST';
-          break;
-        case 'MODEL_NOT_FOUND':
-          status = 400;
-          apiCode = 'NOT_FOUND';
-          break;
-        case 'RATE_LIMIT_ERROR':
-          status = 429;
-          apiCode = 'SERVICE_UNAVAILABLE';
-          break;
-        case 'CONFIGURATION_ERROR':
-          status = 503;
-          apiCode = 'SERVICE_UNAVAILABLE';
-          break;
-        case 'AUTHENTICATION_ERROR':
-        case 'PERMISSION_DENIED':
-        case 'PROVIDER_DOWN':
-          status = 502;
-          apiCode = 'SERVICE_UNAVAILABLE';
-          break;
-        case 'NETWORK_ERROR':
-          status = 504;
-          apiCode = 'SERVICE_UNAVAILABLE';
-          break;
-        default:
-          status = err.statusCode || 500;
-          apiCode = 'INTERNAL_ERROR';
-      }
-
+      const { status, apiCode } = mapProviderErrorToHttpStatus(err);
       return Response.json(
         createApiErrorResponse(apiCode, err.message),
         { status }

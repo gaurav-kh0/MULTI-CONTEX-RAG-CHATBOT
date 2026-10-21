@@ -31,8 +31,6 @@ import {
   Loader2,
   ShieldCheck,
   RefreshCw,
-  Layers,
-  ArrowRight,
 } from 'lucide-react';
 
 export interface DocumentUploadProps {

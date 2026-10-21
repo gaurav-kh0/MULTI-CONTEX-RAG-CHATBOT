@@ -1,12 +1,10 @@
-import test, { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   ChatService,
-  buildSystemInstruction,
 } from '../backend/services/chat-service.ts';
 import {
   ProviderRegistry,
-  MockProvider,
   OpenRouterProvider,
   ProviderError,
 } from '../backend/providers/index.ts';
@@ -581,6 +579,7 @@ describe('ChatService - Streaming Message Generation', () => {
       0,
       'Assistant message must not be persisted on stream error.'
     );
+    assert.equal(session.messages.length, initialCount, 'Session messages should be rolled back on stream error');
   });
 
   it('stops streaming when AbortSignal is cancelled', async () => {

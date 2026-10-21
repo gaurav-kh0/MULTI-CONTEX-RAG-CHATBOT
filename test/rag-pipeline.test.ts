@@ -1,4 +1,4 @@
-import test, { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -16,7 +16,6 @@ import {
 } from '../backend/rag/retriever.ts';
 import {
   ProviderRegistry,
-  ProviderError,
 } from '../backend/providers/index.ts';
 import type {
   ILlmProviderAdapter,

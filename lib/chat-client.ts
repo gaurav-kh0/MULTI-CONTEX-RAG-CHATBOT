@@ -46,6 +46,18 @@ export class ChatClient {
     return body.data;
   }
 
+  async fetchProviders(): Promise<import('./types.ts').ProvidersResponsePayload> {
+    const res = await fetch(`${this.baseApiUrl}/providers`);
+    if (!res.ok) {
+      throw new Error(`Failed to load providers (Status: ${res.status})`);
+    }
+    const body = (await res.json()) as ApiResponse<import('./types.ts').ProvidersResponsePayload>;
+    if (!body.success) {
+      throw new Error(body.error.message || 'Invalid provider data received.');
+    }
+    return body.data;
+  }
+
   async fetchSessions(): Promise<ChatSession[]> {
     const res = await fetch(`${this.baseApiUrl}/chat/sessions`);
     if (!res.ok) {
@@ -81,6 +93,22 @@ export class ChatClient {
     if (!res.ok) {
       throw new Error(`Failed to delete session (Status: ${res.status})`);
     }
+  }
+
+  async clearSession(sessionId: string): Promise<ChatSession> {
+    const res = await fetch(`${this.baseApiUrl}/chat/sessions/${sessionId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'clear' }),
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to clear session (Status: ${res.status})`);
+    }
+    const body = (await res.json()) as ApiResponse<ChatSession>;
+    if (!body.success) {
+      throw new Error(body.error.message || 'Failed to clear session.');
+    }
+    return body.data;
   }
 
   async sendMessage(payload: SendChatMessageRequest): Promise<SendMessageResponse> {

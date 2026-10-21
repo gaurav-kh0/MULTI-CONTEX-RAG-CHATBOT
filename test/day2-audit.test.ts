@@ -1,4 +1,4 @@
-import test, { describe, it } from 'node:test';
+import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   GeminiProvider,
@@ -21,12 +21,7 @@ import {
   initialState,
 } from '../hooks/useChatState.ts';
 import type {
-  ChatAction,
-  ChatState,
-} from '../hooks/useChatState.ts';
-import type {
   ChatMessage,
-  ChatSession,
 } from '../lib/types.ts';
 import type {
   ProviderGenerateRequest,

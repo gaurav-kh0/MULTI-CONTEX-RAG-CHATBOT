@@ -21,12 +21,15 @@ export default function ChatbotPage() {
     retryLastMessage,
     cancelCurrentRequest,
     startNewChat,
+    clearCurrentChat,
     selectSession,
     deleteSession,
     toggleScope,
     selectSuggestedQuestion,
     toggleSidebar,
     setMobileNav,
+    setProvider,
+    setModel,
     refreshDocuments,
     setSelectedDocumentId,
     setDocumentOnly,
@@ -63,9 +66,16 @@ export default function ChatbotPage() {
           onToggleDesktopSidebar={toggleSidebar}
           isSidebarCollapsed={state.isSidebarCollapsed}
           onNewChat={startNewChat}
+          onClearChat={clearCurrentChat}
+          hasMessages={state.messages.length > 0}
           onOpenUploadModal={() => setIsUploadModalOpen(true)}
           onOpenSearchModal={() => setIsSearchModalOpen(true)}
           activeContextCount={state.activeScopeIds.length}
+          providers={state.providers}
+          selectedProviderId={state.selectedProviderId}
+          selectedModel={state.selectedModel}
+          onSelectProvider={setProvider}
+          onSelectModel={setModel}
         />
 
         {/* Selected Context Bar: Remains visible & changeable during active chat */}
@@ -97,6 +107,7 @@ export default function ChatbotPage() {
               isLoading={state.isLoading}
               error={state.error}
               onRetry={retryLastMessage}
+              onSelectQuestion={selectSuggestedQuestion}
             />
           )}
         </main>

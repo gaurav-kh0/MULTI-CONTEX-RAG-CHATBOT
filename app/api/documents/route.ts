@@ -17,6 +17,7 @@ import { EmbeddingError } from '../../../backend/rag/embeddings.ts';
 import { PineconeStorageError } from '../../../backend/storage/pinecone.ts';
 import {
   parseContextType,
+  validateDocumentId,
   createApiSuccessResponse,
   createApiErrorResponse,
 } from '../../../lib/validation.ts';
@@ -300,8 +301,19 @@ export async function DELETE(request: Request): Promise<Response> {
     );
   }
 
+  const docIdCheck = validateDocumentId(id);
+  if (!docIdCheck.valid) {
+    return Response.json(
+      createApiErrorResponse('VALIDATION_ERROR', docIdCheck.error, [
+        { field: 'id', message: docIdCheck.error },
+      ]),
+      { status: 400 }
+    );
+  }
+  const cleanId = docIdCheck.value;
+
   try {
-    const deleted = await documentService.deleteDocument(id.trim());
+    const deleted = await documentService.deleteDocument(cleanId);
     if (!deleted) {
       return Response.json(
         createApiErrorResponse('NOT_FOUND', `Document '${id}' not found.`),

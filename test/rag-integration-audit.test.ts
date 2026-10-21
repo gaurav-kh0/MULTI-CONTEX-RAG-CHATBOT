@@ -15,13 +15,11 @@
  * 11. Empirical Recall@k measurement on benchmark technical queries.
  */
 
-import test, { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
   RagPipeline,
-  formatRetrievedEvidence,
-  determineGroundingStatus,
   DECLINED_DOCUMENT_ONLY_MESSAGE,
 } from '../backend/rag/rag-pipeline.ts';
 import {
@@ -29,7 +27,6 @@ import {
   RetrieverError,
 } from '../backend/rag/retriever.ts';
 import {
-  detectContext,
   resolveContextRouting,
 } from '../backend/rag/context-detector.ts';
 import {

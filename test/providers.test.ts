@@ -1,9 +1,8 @@
-import test, { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   GeminiProvider,
   OpenRouterProvider,
-  NvidiaProvider,
   MockProvider,
   ProviderRegistry,
   ProviderError,
@@ -20,25 +19,6 @@ import {
   DEFAULT_NVIDIA_MODEL,
 } from '../backend/providers/nvidia.ts';
 
-// ---------------------------------------------------------------------------
-// Helper: Create a readable Web Stream of SSE chunks from string segments
-// ---------------------------------------------------------------------------
-function createMockSseResponse(chunks: string[]): Response {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(chunk));
-      }
-      controller.close();
-    },
-  });
-
-  return new Response(stream, {
-    status: 200,
-    headers: { 'Content-Type': 'text/event-stream' },
-  });
-}
 
 // ---------------------------------------------------------------------------
 // 1. Error Mapping & ProviderError Tests

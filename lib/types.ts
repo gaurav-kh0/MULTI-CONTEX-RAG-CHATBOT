@@ -53,6 +53,20 @@ export const PROVIDER_IDS: readonly ProviderId[] = [
 export type LlmProviderType = ProviderId;
 export type EmbeddingProviderType = 'openai' | 'ollama' | 'mock' | 'gemini';
 
+export interface ProviderInfo {
+  id: ProviderId;
+  name: string;
+  isConfigured: boolean;
+  defaultModel: string;
+  models: string[];
+}
+
+export interface ProvidersResponsePayload {
+  defaultProviderId: ProviderId;
+  defaultModel?: string;
+  providers: ProviderInfo[];
+}
+
 export interface TokenUsage {
   promptTokens: number;
   completionTokens: number;

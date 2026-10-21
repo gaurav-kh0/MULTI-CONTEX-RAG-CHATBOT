@@ -7,7 +7,7 @@ import type {
   RagQueryOptions,
   RagRetrievalResult,
 } from '../../lib/types.ts';
-import { PineconeVectorStore, pineconeVectorStore } from './pinecone.ts';
+import { pineconeVectorStore } from './pinecone.ts';
 
 export type { IDocumentStore, IVectorStore };
 

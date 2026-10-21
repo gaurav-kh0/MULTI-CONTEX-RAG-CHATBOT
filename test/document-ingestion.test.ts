@@ -1,4 +1,4 @@
-import test, { describe, it, before, after, beforeEach } from 'node:test';
+import { describe, it, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -21,11 +21,9 @@ import {
   DocumentService,
 } from '../backend/services/document-service.ts';
 import {
-  POST,
   DELETE,
 } from '../app/api/documents/route.ts';
 import type {
-  ContextType,
   DocumentChunk,
   IEmbeddingProvider,
   IVectorStore,

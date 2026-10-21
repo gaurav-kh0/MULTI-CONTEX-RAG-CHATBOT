@@ -3,12 +3,8 @@
  *
  * Exports unified LLM provider adapters, registry, streaming parsers, and error types.
  */
-
-import type { EmbeddingProviderType, IEmbeddingProvider } from '../../lib/types.ts';
-import { MockProvider } from './mock-provider.ts';
-
 // 1. Errors & Status Mapping
-export { ProviderError, mapHttpStatusToErrorCode } from './errors.ts';
+export { ProviderError, mapHttpStatusToErrorCode, mapProviderErrorToHttpStatus, sanitizeErrorMessage } from './errors.ts';
 export type { ProviderErrorCode, ProviderErrorOptions } from './errors.ts';
 
 // 2. Types & Request/Response Contracts
@@ -54,21 +50,3 @@ export { MockProvider } from './mock-provider.ts';
 
 // 5. Registry & Resolution
 export { ProviderRegistry, providerRegistry, getLlmProvider } from './registry.ts';
-
-// 6. Embedding Provider (Stub for future vector phases)
-export class StubEmbeddingProvider implements IEmbeddingProvider {
-  id: EmbeddingProviderType = 'mock';
-  name = 'Stub Embedding Provider';
-
-  async generateEmbedding(_text: string): Promise<number[]> {
-    return new Array(1536).fill(0);
-  }
-
-  async generateBatchEmbeddings(texts: string[]): Promise<number[][]> {
-    return texts.map(() => new Array(1536).fill(0));
-  }
-}
-
-// 7. Defaults for backward compatibility
-export const defaultLlmProvider = new MockProvider();
-export const defaultEmbeddingProvider = new StubEmbeddingProvider();

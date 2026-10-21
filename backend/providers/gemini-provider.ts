@@ -282,6 +282,10 @@ export class GeminiProvider implements ILlmProviderAdapter {
 
     try {
       for await (const chunk of responseStream) {
+        if (request.options?.abortSignal?.aborted) {
+          return;
+        }
+
         if (chunk.usageMetadata) {
           aggregatedUsage = {
             promptTokens: chunk.usageMetadata.promptTokenCount ?? 0,
